@@ -1,0 +1,15 @@
+/*#
+#define CTIMEUTILS_IMPLEMENTATION
+#include "ctime_utils.h"
+char *comptime_sum(int a, int b) {
+	int result = a + b;
+	char *s = format("%d", result);
+	return s;
+}
+#*/
+#include <stdio.h>
+
+int main() {
+	printf("%d\n", /*$ comptime_sum(6, 7) $*/);
+	return 0;
+}

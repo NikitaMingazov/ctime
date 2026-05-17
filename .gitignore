@@ -1,0 +1,11 @@
+#binaries
+*.o
+ctime
+build/*
+nob
+nob.old*
+# tooling junk
+.cache
+vgcore.*
+# do 'bear -- ./nob' yourself if you need this
+compile_commands.json
