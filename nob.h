@@ -342,11 +342,7 @@ NOBDEF void nob_dir_entry_close(Nob_Dir_Entry dir);
 #define NOB_DA_INIT_CAP 256
 #endif
 
-#ifdef __cplusplus
-#define NOB_DECLTYPE_CAST(T) (decltype(T))
-#else
 #define NOB_DECLTYPE_CAST(T)
-#endif // __cplusplus
 
 #define nob_da_reserve(da, expected_capacity)                                              \
     do {                                                                                   \
@@ -653,26 +649,11 @@ typedef struct {
 // use it as a C string.
 NOBDEF void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render);
 
-// Compound Literal
-#if defined(__cplusplus)
-    #define NOB_CLIT(type) type
-#else
-    #define NOB_CLIT(type) (type)
-#endif
+#define NOB_CLIT(type) (type)
 
 NOBDEF void nob__cmd_append(Nob_Cmd *cmd, size_t n, const char **args);
-#if defined(__cplusplus)
-    template <typename... Args>
-    static inline void nob__cpp_cmd_append_wrapper(Nob_Cmd *cmd, Args... strs)
-    {
-        const char* args[] = { strs... };
-        nob__cmd_append(cmd, sizeof(args)/sizeof(args[0]), args);
-    }
-    #define nob_cmd_append(cmd, ...) nob__cpp_cmd_append_wrapper(cmd, __VA_ARGS__)
-#else
-    #define nob_cmd_append(cmd, ...) \
-        nob__cmd_append(cmd, sizeof((const char*[]){__VA_ARGS__})/sizeof(const char*), (const char*[]){__VA_ARGS__})
-#endif // __cplusplus
+#define nob_cmd_append(cmd, ...) \
+    nob__cmd_append(cmd, sizeof((const char*[]){__VA_ARGS__})/sizeof(const char*), (const char*[]){__VA_ARGS__})
 
 // TODO: nob_cmd_extend() evaluates other_cmd twice
 // It can be fixed by turning nob_cmd_extend() call into a statement.
@@ -834,28 +815,16 @@ NOBDEF char *nob_temp_running_executable_path(void);
 #ifndef NOB_REBUILD_URSELF
 #  if defined(_WIN32)
 #    if defined(__clang__)
-#      if defined(__cplusplus)
-#        define NOB_REBUILD_URSELF(binary_path, source_path) "clang", "-x", "c++", "-o", binary_path, source_path
-#      else
-#        define NOB_REBUILD_URSELF(binary_path, source_path) "clang", "-x", "c", "-o", binary_path, source_path
-#      endif
+#      define NOB_REBUILD_URSELF(binary_path, source_path) "clang", "-x", "c", "-o", binary_path, source_path
 #    elif defined(__GNUC__)
-#      if defined(__cplusplus)
-#        define NOB_REBUILD_URSELF(binary_path, source_path) "gcc", "-x", "c++", "-o", binary_path, source_path
-#      else
-#        define NOB_REBUILD_URSELF(binary_path, source_path) "gcc", "-x", "c", "-o", binary_path, source_path
-#      endif
+#      define NOB_REBUILD_URSELF(binary_path, source_path) "gcc", "-x", "c", "-o", binary_path, source_path
 #    elif defined(_MSC_VER)
 #       define NOB_REBUILD_URSELF(binary_path, source_path) "cl.exe", nob_temp_sprintf("/Fe:%s", (binary_path)), source_path
 #    elif defined(__TINYC__)
 #       define NOB_REBUILD_URSELF(binary_path, source_path) "tcc", "-o", binary_path, source_path
 #    endif
 #  else
-#    if defined(__cplusplus)
-#      define NOB_REBUILD_URSELF(binary_path, source_path) "cc", "-x", "c++", "-o", binary_path, source_path
-#    else
-#      define NOB_REBUILD_URSELF(binary_path, source_path) "cc", "-x", "c", "-o", binary_path, source_path
-#    endif
+#    define NOB_REBUILD_URSELF(binary_path, source_path) "cc", "-x", "c", "-o", binary_path, source_path
 #  endif
 #endif
 
@@ -3284,3 +3253,4 @@ NOBDEF char *nob_temp_running_executable_path(void)
    WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
    ------------------------------------------------------------------------------
 */
+
