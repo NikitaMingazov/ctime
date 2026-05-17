@@ -6,6 +6,8 @@
 #ifndef LEXER_H
 #define LEXER_H
 
+#include <stdio.h>
+
 // tokens: <STRING>, #{, }#, $(, )$, <EOF>
 typedef enum {
 	TOKEN_NONE, // option<token>
@@ -34,7 +36,7 @@ typedef struct {
 
 typedef struct Lexer Lexer;
 
-Lexer *lexer_new(const char *filename);
+Lexer *lexer_new(FILE *in_stream);
 void lexer_free(Lexer *lex);
 Token lexer_next(Lexer *lex);
 

@@ -27,7 +27,7 @@ char *token_to_str(Token tok) {
 }
 
 struct Lexer {
-	FILE *file;
+	FILE *in_stream;
 	Token next;
 	Buffer *buffer;
 };
@@ -37,16 +37,11 @@ static void fatal(const char *msg) {
 	exit(1);
 }
 
-Lexer *lexer_new(const char *filename) {
-	FILE *f = fopen(filename, "r");
-	if (!f) {
-		perror("fopen");
-		exit(1);
-	}
+Lexer *lexer_new(FILE *in_stream) {
 	Lexer *lex = malloc(sizeof(*lex));
 	if (!lex) fatal("out of memory");
 	*lex = (Lexer) {
-		.file = f,
+		.in_stream = in_stream,
 		.next = token_new(TOKEN_NONE, NULL),
 		.buffer = buffer_new(),
 	};
@@ -55,7 +50,6 @@ Lexer *lexer_new(const char *filename) {
 
 void lexer_free(Lexer *lex) {
 	if (lex) {
-		if (lex->file) fclose(lex->file);
 		buffer_free(lex->buffer);
 		free(lex);
 	}
@@ -106,7 +100,7 @@ Token lexer_next(Lexer *lex) {
 
 	char *s;
 	int c;
-	while ((c = fgetc(lex->file)) != EOF) {
+	while ((c = fgetc(lex->in_stream)) != EOF) {
 		buffer_append_char(lex->buffer, (char) c);
 	epsilon:
 		switch (state) {
