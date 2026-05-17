@@ -1,6 +1,6 @@
 /*
   This lexical granularity is a bit overkill for the current design where comptime def and insertion are completely separate.
-  But in the future I may want to layer higher levels of comptime, for which this would be needed for using a different layer's / *$ $* /.
+  But in the future I may want to layer higher levels of comptime, for which this would be needed for using a different layer's $( )$.
   Also C comments/CPP comments/strings/chars is a pain.
 */
 
@@ -61,17 +61,26 @@ void lexer_free(Lexer *lex) {
 	}
 }
 
-static int number_of_chars_before(const char *s, int offset, const char c) {
-	int count = 0;
-	for (; offset >= 0; --offset) {
-		if (s[offset] != c)
-			break;
-		++count;
-	}
-	return count;
-}
+#define SWITCH_TRANSITION(CHAR, STATE) \
+	case CHAR: \
+		state = STATE; \
+		break;
+
+#define PUSH_TOKEN(TYPE) \
+	state = S_CSOURCE; \
+	/* clear down to previous string */ \
+	buffer_pop_end(lex->buffer); \
+	buffer_pop_end(lex->buffer); \
+	if (lex->buffer->len == 0) { /* no string before */ \
+		return token_new(TYPE, NULL); \
+	} \
+	s = buffer_to_cstr(lex->buffer); \
+	buffer_clear(lex->buffer); \
+	lex->next = (Token) { .type = TYPE, .string_data = NULL }; \
+	return token_new(TOKEN_STRING, s);
 
 Token lexer_next(Lexer *lex) {
+	/* lexer holds up to 1 token queued */
 	if (lex->next.type != TOKEN_NONE) {
 		Token t = lex->next;
 		lex->next = (Token) { TOKEN_NONE, NULL };
@@ -80,115 +89,103 @@ Token lexer_next(Lexer *lex) {
 	/* State machine */
 	enum {
 		S_CSOURCE,
-		S_SLASH,			  // /
-		S_SLASH_STAR,		 // /*
-		S_C_COMMENT,  // /*[^#%]
-		S_C_COMMENT_STAR,  // /* ... *
+		S_CSOURCE_CHAR, /*  '  */
+		S_CSOURCE_CHAR_ESCAPE, /*  '\  */
+		S_CSOURCE_CHAR_DONE, /*  '\_  */
+		S_CSTRLIT,
+		S_CSTRLIT_ESCAPE,
+		S_HASH,
+		S_RCURL,
+		S_DOLLAR,
+		S_RPAR,
+		S_SLASH,
+		S_C_COMMENT,
+		S_C_COMMENT_STAR,
 		S_CPP_COMMENT,
-		S_HASH,  // #
-		S_HASH_STAR,  // #*
-		S_DOLLAR,  // $
-		S_DOLLAR_STAR,  // $*
 	} state = S_CSOURCE;
-
-	bool in_c_string = false;
-	char prev = '\0';
 
 	char *s;
 	int c;
 	while ((c = fgetc(lex->file)) != EOF) {
-		/* this needs to be checked before buffer insertion */
-		int bses_before_top = number_of_chars_before(lex->buffer->data, lex->buffer->len-1, '\\');
-		// string is theoretically a state, but is almost orthogonal
-		buffer_append_char(lex->buffer, c);
-		bool can_enter_string = !in_c_string && state != S_C_COMMENT && state != S_C_COMMENT_STAR && state != S_CPP_COMMENT && state != S_SLASH_STAR;
-		/* printf("state: %d, char: %c, in_c_string: %d, \\'s before top:%d'\n", state, c, in_c_string, bses_before_top); */
-		/* printf("%c.", c); */
-		if (in_c_string) {
-			if (c == '"' && bses_before_top % 2 == 0)
-				in_c_string = false;
-			if (c == '\n')
-				in_c_string = false;
-			prev = c; // for discerning strings
-			continue;
-		} else if (c == '"' && can_enter_string && prev != '\'' && bses_before_top % 2 == 0) {
-			in_c_string = true;
-			state = S_CSOURCE;
-			prev = c; // for discerning strings
-			continue;
-		}
-		prev = c; // for discerning strings
-
+		buffer_append_char(lex->buffer, (char) c);
+	epsilon:
 		switch (state) {
 			case S_CSOURCE:
 				switch (c) {
-					case '/':
-						state = S_SLASH;
-						break;
-					case '#':
-						state = S_HASH;
-						break;
-					case '$':
-						state = S_DOLLAR;
-						break;
+					SWITCH_TRANSITION('#', S_HASH)
+					SWITCH_TRANSITION('$', S_DOLLAR)
+					SWITCH_TRANSITION('}', S_RCURL)
+					SWITCH_TRANSITION(')', S_RPAR)
+					SWITCH_TRANSITION('/', S_SLASH)
+					SWITCH_TRANSITION('"', S_CSTRLIT)
+					SWITCH_TRANSITION('\'', S_CSOURCE_CHAR)
 				}
+				break;
+
+			case S_HASH:
+				switch (c) {
+					case '{':
+						PUSH_TOKEN(TOKEN_CTIMEDEF_START)
+					default:
+						state = S_CSOURCE;
+						goto epsilon;
+				}
+				break;
+
+			case S_RCURL:
+				switch (c) {
+					case '#':
+						PUSH_TOKEN(TOKEN_CTIMEDEF_END)
+					default:
+						state = S_CSOURCE;
+						goto epsilon;
+				}
+				break;
+
+			case S_DOLLAR:
+				switch (c) {
+					case '(':
+						PUSH_TOKEN(TOKEN_INSERTION_START)
+					default:
+						state = S_CSOURCE;
+						goto epsilon;
+				}
+				break;
+
+			case S_RPAR:
+				switch (c) {
+					case '$':
+						PUSH_TOKEN(TOKEN_INSERTION_END)
+					default:
+						state = S_CSOURCE;
+						goto epsilon;
+				}
+				break;
+
+			case S_CSTRLIT:
+				switch (c) {
+					SWITCH_TRANSITION('\"', S_CSOURCE)
+					SWITCH_TRANSITION('\\', S_CSTRLIT_ESCAPE)
+				}
+				break;
+
+			case S_CSTRLIT_ESCAPE:
+				state = S_CSTRLIT;
 				break;
 
 			case S_SLASH:
 				switch (c) {
-					case '*':
-						state = S_SLASH_STAR;
-						break;
-					case '/':
-						state = S_CPP_COMMENT;
-						break;
-					case '#':
-						state = S_HASH;
-						break;
-					case '$':
-						state = S_DOLLAR;
-						break;
-				}
-				break;
-
-			case S_SLASH_STAR:
-				switch (c) {
-					case '#':
-						state = S_CSOURCE;
-						/* clear down to previous string */
-						buffer_pop_end(lex->buffer);
-						buffer_pop_end(lex->buffer);
-						buffer_pop_end(lex->buffer);
-						if (lex->buffer->len == 0) { // no string before
-							return token_new(TOKEN_CTIMEDEF_START, NULL);
-						}
-						s = buffer_to_cstr(lex->buffer);
-						buffer_clear(lex->buffer);
-						lex->next = (Token) { .type = TOKEN_CTIMEDEF_START, .string_data = NULL };
-						return token_new(TOKEN_STRING, s);
-					case '$':
-						state = S_CSOURCE;
-						/* clear down to previous string */
-						buffer_pop_end(lex->buffer);
-						buffer_pop_end(lex->buffer);
-						buffer_pop_end(lex->buffer);
-						if (lex->buffer->len == 0) { // no string before
-							return token_new(TOKEN_INSERTION_START, NULL);
-						}
-						s = buffer_to_cstr(lex->buffer);
-						buffer_clear(lex->buffer);
-						lex->next = (Token) { .type = TOKEN_INSERTION_START, .string_data = NULL };
-						return token_new(TOKEN_STRING, s);
+					SWITCH_TRANSITION('*', S_C_COMMENT)
+					SWITCH_TRANSITION('/', S_CPP_COMMENT)
 					default:
-						state = S_C_COMMENT;
-						break;
+						state = S_CSOURCE;
+						goto epsilon;
 				}
 				break;
 
 			case S_C_COMMENT:
-				if (c == '*') {
+				if (c == '*')
 					state = S_C_COMMENT_STAR;
-				}
 				break;
 
 			case S_C_COMMENT_STAR:
@@ -200,98 +197,27 @@ Token lexer_next(Lexer *lex) {
 				break;
 
 			case S_CPP_COMMENT:
-				if (c == '\n')
+				if (c == '\n' && lex->buffer->data[lex->buffer->len - 2] != '\\')
 					state = S_CSOURCE;
 				break;
 
-			case S_HASH:
-				switch (c) {
-					case '*':
-						state = S_HASH_STAR;
-						break;
-					case '/':
-						state = S_SLASH;
-						break;
-					case '#':
-						state = S_HASH;
-						break;
-					case '$':
-						state = S_DOLLAR;
-						break;
+			case S_CSOURCE_CHAR:
+				if (c == '\\') {
+					state = S_CSOURCE_CHAR_ESCAPE;
+				} else {
+					state = S_CSOURCE_CHAR_DONE;
 				}
 				break;
 
-			case S_HASH_STAR:
-				switch (c) {
-					case '/':
-						state = S_CSOURCE;
-						/* clear down to previous string */
-						buffer_pop_end(lex->buffer);
-						buffer_pop_end(lex->buffer);
-						buffer_pop_end(lex->buffer);
-						if (lex->buffer->len == 0) { // no string before
-							return token_new(TOKEN_CTIMEDEF_END, NULL);
-						}
-						char *s = buffer_to_cstr(lex->buffer);
-						buffer_clear(lex->buffer);
-						lex->next = token_new(TOKEN_CTIMEDEF_END, NULL);
-						return token_new(TOKEN_STRING, s);
-					case '#':
-						state = S_HASH;
-						break;
-					case '$':
-						state = S_DOLLAR;
-						break;
-					default:
-						state = S_CSOURCE;
-						break;
-				}
+			case S_CSOURCE_CHAR_ESCAPE:
+				state = S_CSOURCE_CHAR_DONE;
 				break;
 
-			case S_DOLLAR:
-				switch (c) {
-					case '*':
-						state = S_DOLLAR_STAR;
-						break;
-					case '/':
-						state = S_SLASH;
-						break;
-					case '#':
-						state = S_HASH;
-						break;
-					case '$':
-						state = S_DOLLAR;
-						break;
-				}
+			case S_CSOURCE_CHAR_DONE:
+				/* if (c == '\'') { */
+				state = S_CSOURCE;
 				break;
 
-			case S_DOLLAR_STAR:
-				switch (c) {
-					case '/':
-						state = S_CSOURCE;
-						/* clear down to previous string */
-						buffer_pop_end(lex->buffer);
-						buffer_pop_end(lex->buffer);
-						buffer_pop_end(lex->buffer);
-						if (lex->buffer->len == 0) { // no string before
-							return token_new(TOKEN_INSERTION_END, NULL);
-						}
-						char *s = buffer_to_cstr(lex->buffer);
-						buffer_clear(lex->buffer);
-						lex->next = token_new(TOKEN_INSERTION_END, NULL);
-						return token_new(TOKEN_STRING, s);
-						break;
-					case '#':
-						state = S_HASH;
-						break;
-					case '$':
-						state = S_DOLLAR;
-						break;
-					default:
-						state = S_CSOURCE;
-						break;
-				}
-				break;
 		}
 	}
 	if (lex->buffer->len > 0) {

@@ -2,11 +2,11 @@
    Implementation of the transpiler
 */
 
-// for /*$, the format is
+// for $(  )$, the format is
 // "char *__comptime_%d() { return %s; }\n", counter, expr
 
 // nob supposedly also has portable filesystem utilities
-// but needing to define posix source is concerning, I'll raise an issue
+// but needing to define posix source is concerning, I may raise an issue
 #define NOB_TEMP_CAPACITY 256
 #define _POSIX_C_SOURCE 200809L
 #define NOB_IMPLEMENTATION
@@ -36,7 +36,6 @@ static TCCState *compile_str_in_memory(const char *to_compile, const char *sourc
 		fprintf(stderr, "Failed to add include path\n");
 		goto cleanup;
 	}
-	// compile to memory
 	if (tcc_set_output_type(s, TCC_OUTPUT_MEMORY) < 0) {
 		fprintf(stderr, "Failed to set output type\n");
 		goto cleanup;

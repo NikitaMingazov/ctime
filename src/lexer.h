@@ -6,7 +6,7 @@
 #ifndef LEXER_H
 #define LEXER_H
 
-// tokens: <STRING>, /*#, #*/, /*$, $*/, <EOF>
+// tokens: <STRING>, #{, }#, $(, )$, <EOF>
 typedef enum {
 	TOKEN_NONE, // option<token>
 	TOKEN_STRING,
@@ -20,10 +20,10 @@ typedef enum {
 static char *TOKENTYPE_TO_STR[] = {
 	"none",
 	"string",
-	"/*#",
-	"#*/",
-	"/*$",
-	"$*/",
+	"#{",
+	"}#",
+	"$(",
+	")$",
 	"EOF",
 };
 

@@ -1,24 +1,22 @@
 /*
-   A bunch of edgecases for parsing.
-   (but syntax is about to change)
+   A few edgecases for parsing.
+   (I used to use /*# amd /*$ syntax, which was horrid)
 */
 
 #include <stdio.h>
 
-// these are tokens /*# #*/ /*$ $*/
+// these are tokens #{ }# $( )$
 /* but they're in a comment so it's fine! */
 // "
-/* as is this /*# /*$? */
+/* as is this #{ $( */
 /* " */
 
 int main() {
-	if ('\\' < '"') /*$ "// this should be inserted" $*/
+	if ('\\' < '"') $( "// this should be inserted" )$
 		puts("less");
-	// /*#
+	// #{
 	// this should remain
-	// #*/
-	puts("\\\\\" /*# #*/ /*$ $*/ \\");
-	/* # # */
+	// }#
+	puts("\\\\\" #{ }# $( )$ \\");
 	return 0;
 }
-

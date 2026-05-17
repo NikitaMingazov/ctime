@@ -1,4 +1,4 @@
-/*#
+#{
 #define CTIMEUTILS_IMPLEMENTATION
 #include "ctime_utils.h"
 #define TYPE "ll"
@@ -14,7 +14,7 @@ char *ll_sum(const char *T) {
 	return format(TYPE"_%s_sum", T);
 }
 char *ll_push(const char *T) {
-	return format(TYPE"_%s_push(", T);
+	return format(TYPE"_%s_push", T);
 }
 // required traits
 char *ll_zero_trait(const char *T) {
@@ -72,37 +72,37 @@ char *ll_template(const char *T) {
 	T, T, T, T, T, T,
 	T, T, T, T, T);
 // TODO: a higher level of abstraction for these Ts
-// nesting /*$ ... $* / inside these could work
+// nesting $( ... )$ inside these could work
 // but is nontrivial to implement
 }
-#*/
+}#
 #define CTIMEUTILS_IMPLEMENTATION
 #include "ctime_utils.h"
 #include <stdio.h>
 
-int /*$ ll_zero_trait("int") $*/()
+int $( ll_zero_trait("int") )$ ()
 	{ return 0; }
-int /*$ ll_add_trait("int") $*/(int a, int b)
+int $( ll_add_trait("int") )$ (int a, int b)
 	{ return a + b; }
-char* /*$ ll_format_trait("int") $*/(int k)
+char* $( ll_format_trait("int") )$ (int k)
 	{ return format("%d", k); }
-/*$ ll_template("int") $*/
+$( ll_template("int") )$
 
-float /*$ ll_zero_trait("float") $*/()
+float $( ll_zero_trait("float") )$ ()
 	{ return 10.0; } // trait misuse!
-float /*$ ll_add_trait("float") $*/(float x, float y)
+float $( ll_add_trait("float") )$ (float x, float y)
 	{ return x + y; }
-char* /*$ ll_format_trait("float") $*/(float x)
+char* $( ll_format_trait("float") )$ (float x)
 	{ return format("%f", x); }
-/*$ ll_template("float") $*/
+$( ll_template("float") )$
 
 #include <string.h>
 typedef struct cstr {
 	char* s;
 } cstr;
-cstr /*$ ll_zero_trait("cstr") $*/()
+cstr $( ll_zero_trait("cstr") )$ ()
 	{ return (cstr) { .s = "" }; }
-cstr /*$ ll_add_trait("cstr") $*/(cstr s1, const cstr s2)
+cstr $( ll_add_trait("cstr") )$ (cstr s1, const cstr s2)
 	{
 		char *s = malloc(1);
 		*s = '\0';
@@ -110,24 +110,23 @@ cstr /*$ ll_add_trait("cstr") $*/(cstr s1, const cstr s2)
 		strcat(s, s2.s);
 		return (cstr) { .s=s };
 	}
-char* /*$ ll_format_trait("cstr") $*/(cstr s)
+char* $( ll_format_trait("cstr") )$ (cstr s)
 	{ return s.s; }
-/*$ ll_template("cstr") $*/
+$( ll_template("cstr") )$
 
 int main() {
-	/*$ ll("int") $*/ intlist = /*$ ll_new("int") $*/;
-	/*$ ll_push("int") $*/intlist, 6);
-	/*$ ll_push("int") $*/intlist, 7);
-	printf("%s\n", /*$ ll_sum("int") $*/(intlist) );
-	/*$ ll("float") $*/ floatlist = /*$ ll_new("float") $*/;
-	/*$ ll_push("float") $*/floatlist, 6.0);
-	/*$ ll_push("float") $*/floatlist, 7.0);
-	printf("%s\n", /*$ ll_sum("float") $*/(floatlist) );
-	/*$ ll("cstr") $*/ strlist = /*$ ll_new("cstr") $*/;
-	/*$ ll_push("cstr") $*/strlist, (cstr) { .s="t" });
-	/*$ ll_push("cstr") $*/strlist, (cstr) { .s="r" });
-	/*$ ll_push("cstr") $*/strlist, (cstr) { .s="d" });
-	printf("%s\n", /*$ ll_sum("cstr") $*/(strlist) );
+	$( ll("int") )$ intlist = $( ll_new("int") )$;
+	$( ll_push("int") )$ (intlist, 6);
+	$( ll_push("int") )$ (intlist, 7);
+	printf("%s\n", $( ll_sum("int") )$(intlist) );
+	$( ll("float") )$ floatlist = $( ll_new("float") )$;
+	$( ll_push("float") )$ (floatlist, 6.0);
+	$( ll_push("float") )$ (floatlist, 7.0);
+	printf("%s\n", $( ll_sum("float") )$(floatlist) );
+	$( ll("cstr") )$ strlist = $( ll_new("cstr") )$;
+	$( ll_push("cstr") )$ (strlist, (cstr) { .s="t" });
+	$( ll_push("cstr") )$ (strlist, (cstr) { .s="r" });
+	$( ll_push("cstr") )$ (strlist, (cstr) { .s="d" });
+	printf("%s\n", $( ll_sum("cstr") )$ (strlist) );
 	return 0;
 }
-
