@@ -5,14 +5,47 @@
 #define CTIMEUTILS_H
 
 #include <stdarg.h>
+#include <stddef.h>
+
+// the type returned by insertion macros
+typedef const char* ctt_str;
+
+// I might make a new type to return more metadata to the transpiler
+// As far as I have in mind, NULL for error is sufficient
+// But this interface will always be valid
+
+// Returns a string for use in macros (currently just a normal char*)
+#define ctt_return(STR) \
+	return (ctt_str)STR
+
+// If an expression is false, returns an error to the transpiler
+// and prints a given string to stderr
+#define ctt_assert(BOOL, STR) \
+	do { \
+		if (!BOOL) { \
+			fprintf(stderr, "%s\n", STR); \
+			return (ctt_str)NULL; \
+		} \
+	} while {0}
+
+// Returns an error to transpiler and prints a given string to stderr
+#define ctt_error(STR) \
+	fprintf(stderr, "%s\n", STR); \
+	return (ctt_str)NULL; \
 
 // useful functions
+
+// returns a string that when printed, is identical to "s" minus the ""
+char *ctt_quote(const char *s);
 
 // returns a new formatted string
 char *ctt_format(const char *fmt, ...);
 
-// returns a string that when printed, is identical minus the ""
-char *ctt_quote(const char *s);
+// replaces substrings with a given string, and returns a new string
+char *ctt_substr_replace(const char *s, const char *find, const char *replace);
+
+// counts how many occurrences of a substring are present
+int ctt_substr_count(const char *s, const char *substr);
 
 #endif /* CTIMEUTILS_H */
 
@@ -40,57 +73,126 @@ char *ctt_format(const char *fmt, ...) {
 }
 
 char *ctt_quote(const char *s) {
-    if (!s) return NULL;
-    // Worst case: every char becomes 4 chars (\ooo) + quotes, but we don't add outer quotes
-    size_t len = strlen(s);
-    size_t out_len = len * 4 + 1;  // very safe
-    char *out = malloc(out_len);
-    if (!out) return NULL;
+	if (!s) return NULL;
+	// Worst case: every char becomes 4 chars (\ooo) + quotes, but we don't add outer quotes
+	size_t len = strlen(s);
+	size_t out_len = len * 4 + 1;  // very safe
+	char *out = malloc(out_len);
+	if (!out) return NULL;
 
-    char *p = out;
-    while (*s) {
-        switch (*s) {
-            case '\n':
-                *p++ = '\\';
-                *p++ = 'n';
-                break;
-            case '\r':
-                *p++ = '\\';
-                *p++ = 'r';
-                break;
-            case '\t':
-                *p++ = '\\';
-                *p++ = 't';
-                break;
-            case '\"':
-                *p++ = '\\';
-                *p++ = '\"';
-                break;
-            case '\\':
-                *p++ = '\\';
-                *p++ = '\\';
-                break;
-            case '\0':  // shouldn't happen due to strlen, but I might not use strlen later
-                *p++ = '\\';
-                *p++ = '0';
-                break;
-            default:
+	char *p = out;
+	while (*s) {
+		switch (*s) {
+			case '\n':
+				*p++ = '\\';
+				*p++ = 'n';
+				break;
+			case '\r':
+				*p++ = '\\';
+				*p++ = 'r';
+				break;
+			case '\t':
+				*p++ = '\\';
+				*p++ = 't';
+				break;
+			case '\"':
+				*p++ = '\\';
+				*p++ = '\"';
+				break;
+			case '\\':
+				*p++ = '\\';
+				*p++ = '\\';
+				break;
+			case '\0':  // shouldn't happen due to strlen, but I might not use strlen later
+				*p++ = '\\';
+				*p++ = '0';
+				break;
+			default:
 				*p++ = *s;
-                // if (*s >= 32 && *s < 127) {
-                //     *p++ = *s;  // printable ASCII
-                // } else {
-                //     // Octal escape for other control chars
-                //     *p++ = '\\';
-                //     *p++ = '0' + ((*s >> 6) & 7);
-                //     *p++ = '0' + ((*s >> 3) & 7);
-                //     *p++ = '0' + (*s & 7);
-                // }
-                break;
-        }
-        s++;
-    }
-    *p = '\0';
-    return out;
+				// if (*s >= 32 && *s < 127) {
+					// *p++ = *s;  // printable ASCII
+				// } else {
+					// 	// Octal escape for other control chars
+					// 	*p++ = '\\';
+					// 	*p++ = '0' + ((*s >> 6) & 7);
+					// 	*p++ = '0' + ((*s >> 3) & 7);
+					// 	*p++ = '0' + (*s & 7);
+				// }
+				break;
+		}
+		s++;
+	}
+	*p = '\0';
+	return out;
+}
+
+#include <stdlib.h>
+#include <string.h>
+
+char *ctt_substr_replace(const char *s, const char *find, const char *replace) {
+	#define PUSH(C) \
+		do { \
+			if (len == cap) { \
+				cap *= 2; \
+				char *new_buf = realloc(replaced, cap); \
+				if (!new_buf) { \
+					free(replaced); \
+					return NULL; \
+				} \
+				replaced = new_buf; \
+			} \
+			replaced[len++] = (C); \
+		} while (0)
+
+	size_t cap = 8;			   // initial capacity
+	char *replaced = malloc(cap);
+	if (!replaced) return NULL;
+
+	size_t len = 0;			   // current length (excluding final '\0')
+	size_t len_s = strlen(s);
+	size_t len_find = strlen(find);
+	size_t len_rep = strlen(replace);
+
+	// Special case: empty search string – nothing to replace, return a copy
+	if (len_find == 0) {
+		char *copy = malloc(len_s + 1);
+		if (copy) memcpy(copy, s, len_s + 1);
+		free(replaced);
+		return copy;
+	}
+
+	for (size_t i = 0; i < len_s; ++i) {
+		// Check if the substring starting at i matches 'find'
+		if (i + len_find <= len_s && memcmp(s + i, find, len_find) == 0) {
+			// Match found: push the replacement string
+			for (size_t j = 0; j < len_rep; ++j) {
+				PUSH(replace[j]);
+			}
+			i += len_find - 1;   // skip the matched substring (loop will increment i)
+		} else {
+			// No match: push the current character
+			PUSH(s[i]);
+		}
+	}
+
+	PUSH('\0');  // null-terminate the result
+	return replaced;
+
+	#undef PUSH
+}
+
+int ctt_substr_count(const char *s, const char *substr) {
+	int count = 0;
+	for (size_t i = 0; i + strlen(substr) < strlen(s); ++i) {
+		for (size_t j = 0; j < strlen(substr); ++j) {
+			if (s[i+j] == substr[j]) {
+				++count;
+			} else {
+				break;
+			}
+		}
+	}
+	return count;
 }
 
 #endif /* CTIMEUTILS_IMPLEMENTATION */

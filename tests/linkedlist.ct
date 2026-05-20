@@ -72,19 +72,6 @@ const char *ll_template_str =
 #include <string.h>
 #include <stdlib.h>
 
-const int substr_count(const char* str, const char *sub) {
-	int count = 0;
-	for (int i = 0; i + strlen(sub) < strlen(str); ++i) {
-		for (int j = 0; j < strlen(sub); ++j) {
-			if (str[i+j] == sub[j]) {
-				++count;
-			} else {
-				break;
-			}
-		}
-	}
-	return count;
-}
 
 // T,T,T...T,T
 const char *n_Ts(const int n) {
@@ -107,7 +94,7 @@ const char *n_Ts(const int n) {
 const char *ll_template(const char *T) {
 	return ctt_format(
 		$( ctt_format("\"%s\"", ctt_quote(ll_template_str)) )$,
-		$( n_Ts(substr_count(ll_template_str, "%s")) )$
+		$( n_Ts(ctt_substr_count(ll_template_str, "%s")) )$
 	);
 }
 1}#
