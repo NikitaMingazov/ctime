@@ -10,21 +10,21 @@ typedef enum block_type {
 } block_type;
 
 typedef struct source_block {
+	// for source this isn't read
+	// 0.. are comptime, which are compiled in ascending order
+	size_t compilation_layer; // TODO: make this a u16
 	block_type type;
 	char *data;
 } source_block;
 
-/* there is currently only one comptime block,
-   that will probably change to allow for comptime layers.
-   after which, source_block will have a "compilation_layer" u8,
-   and comptime_block will cease to be special, being the 'layer > 0' case */
 typedef struct code_blocks {
-	char *comptime_block;
-	source_block *source_blocks;
-	size_t num_source_blocks;
+	size_t num_comptime_layers;
+	source_block **comptime_layers;
+	size_t *num_blocks_in_comptime_layer;
+	source_block *source_code;
+	size_t num_blocks_in_source;
 } code_blocks;
 
 code_blocks parse_into_blocks(Lexer *lex);
 
-#endif
-
+#endif // PARSER_H

@@ -1,49 +1,52 @@
+/*
+   A toy data structure to demonstrate how ctime can be used to
+   implement higher level language features such as type-aware macros
+*/
 #{
+// header
 #define CTIMEUTILS_IMPLEMENTATION
 #include "ctime_utils.h"
-#define TYPE "ll"
-// type name
-char *ll(const char *T) {
-	return format(TYPE"_%s*", T);
-}
-// methods
-char *ll_new(const char *T) {
-	return format(TYPE"_%s_new()", T);
-}
-char *ll_sum(const char *T) {
-	return format(TYPE"_%s_sum", T);
-}
-char *ll_push(const char *T) {
-	return format(TYPE"_%s_push", T);
-}
-// required traits
-char *ll_zero_trait(const char *T) {
-	return format(TYPE"_%s_zero", T);
-}
-char *ll_add_trait(const char *T) {
-	return format(TYPE"_%s_add", T);
-}
-char *ll_format_trait(const char *T) {
-	return format(TYPE"_%s_format", T);
-}
+// type symbol
+char *ll(const char *T);
+// required trait symbols
+// () -> T
+char *ll_zero_trait(const char *T);
+// (T, const T) -> T
+char *ll_add_trait(const char *T);
+// T -> char*
+char *ll_format_trait(const char *T);
+// auto derivation for int only
+char *ll_derive(const char *T);
+// method symbols
+// () -> ll<T>
+char *ll_new(const char *T);
+// (ll<T>) -> T
+char *ll_sum(const char *T);
+// (ll<T>, T) -> ()
+char *ll_push(const char *T);
+}#
+#{1
+const char *ll_template(const char *T);
+1}#
+#{
 // implementation
-char *ll_template(const char *T) {
-	return format(
+#define TYPE "_z3_ll"
+const char *ll_template_str =
 "#include <stdlib.h>\n"
 "typedef struct node_%s {\n"
 "	struct node_%s *next;\n"
 "	%s data;\n"
 "} node_%s;\n"
-"typedef struct ll_%s {\n"
+"typedef struct "TYPE"_%s {\n"
 "	struct node_%s *head;\n"
 "	int len;\n"
-"} ll_%s;\n"
-"ll_%s *ll_%s_new() {\n"
-"	ll_%s *L = malloc(sizeof(*L));\n"
-"	*L = (ll_%s) { NULL, 0 };\n"
+"} "TYPE"_%s;\n"
+""TYPE"_%s *"TYPE"_%s_new() {\n"
+"	"TYPE"_%s *L = malloc(sizeof(*L));\n"
+"	*L = ("TYPE"_%s) { NULL, 0 };\n"
 "	return L;\n"
 "}\n"
-"void ll_%s_push(ll_%s *L, %s v) {\n"
+"void "TYPE"_%s_push("TYPE"_%s *L, %s v) {\n"
 "	node_%s *N = malloc(sizeof(*N));\n"
 "	*N = (node_%s) {\n"
 "		.next = L->head,\n"
@@ -52,67 +55,140 @@ char *ll_template(const char *T) {
 "	L->head = N;\n"
 "	L->len++;\n"
 "}\n"
-"%s ll_%s_sum_inner(ll_%s *L) {\n"
-"	%s acc = ll_%s_zero();\n"
+"%s "TYPE"_%s_sum_inner("TYPE"_%s *L) {\n"
+"	%s acc = "TYPE"_%s_zero();\n"
 "	node_%s *cur = L->head;\n"
 "	while (cur) {\n"
-"		acc = ll_%s_add(acc, cur->data);\n"
+"		acc = "TYPE"_%s_add(acc, cur->data);\n"
 "		cur = cur->next;\n"
 "	}\n"
 "	return acc;\n"
 "}\n"
-"char *ll_%s_sum(ll_%s *L) {\n"
-"	%s sum = ll_%s_sum_inner(L);\n"
-"	return ll_%s_format(sum);\n"
-"}\n"
-	,
-	T, T, T, T, T, T, T,
-	T, T, T, T, T, T,
-	T, T, T, T, T, T,
-	T, T, T, T, T, T,
-	T, T, T, T, T);
-// TODO: a higher level of abstraction for these Ts
-// nesting $( ... )$ inside these could work
-// but is nontrivial to implement
+"char *"TYPE"_%s_sum("TYPE"_%s *L) {\n"
+"	%s sum = "TYPE"_%s_sum_inner(L);\n"
+"	return "TYPE"_%s_format(sum);\n"
+"}\n";
+
+#include <string.h>
+#include <stdlib.h>
+
+const int substr_count(const char* str, const char *sub) {
+	int count = 0;
+	for (int i = 0; i + strlen(sub) < strlen(str); ++i) {
+		for (int j = 0; j < strlen(sub); ++j) {
+			if (str[i+j] == sub[j]) {
+				++count;
+			} else {
+				break;
+			}
+		}
+	}
+	return count;
+}
+
+// T,T,T...T,T
+const char *n_Ts(const int n) {
+	// char *s = malloc(1); // TODO: check what assembly looks like for this
+	char *s = malloc(2*n);
+	for (int i = 0; i < 2*n; i += 2) {
+		// strcat(s, ",T");
+		s[i] = 'T';
+		if (i+1 != 2*n-1)
+			s[i+1] = ',';
+	}
+	s[2*n-1] = '\0';
+	return s;
+}
+
+}#
+#{1
+#define CTIMEUTILS_IMPLEMENTATION
+#include "ctime_utils.h"
+const char *ll_template(const char *T) {
+	return ctt_format(
+		$( ctt_format("\"%s\"", ctt_quote(ll_template_str)) )$,
+		$( n_Ts(substr_count(ll_template_str, "%s")) )$
+	);
+}
+1}#
+#{
+#include <stdio.h>
+#define TYPE "_z3_ll"
+// type name
+char *ll(const char *T) {
+	return ctt_format(TYPE"_%s*", T);
+}
+// required traits
+// () -> T
+char *ll_zero_trait(const char *T) {
+	return ctt_format(TYPE"_%s_zero", T);
+}
+// (T, const T) -> T
+char *ll_add_trait(const char *T) {
+	return ctt_format(TYPE"_%s_add", T);
+}
+// T -> char*
+char *ll_format_trait(const char *T) {
+	return ctt_format(TYPE"_%s_format", T);
+}
+// auto derivations
+char *ll_derive(const char *T) {
+	if (memcmp(T, "int", strlen(T)) == 0) {
+		return ctt_format(
+"int %s () { return 0; }\n"
+"int %s (int a, const int b) { return a + b; }\n"
+"char* %s (int k) { return ctt_format(\"%%d\", k); }\n",
+		ll_zero_trait("int"),
+		ll_add_trait("int"),
+		ll_format_trait("int"));
+	} else {
+		fprintf(stderr, "error in ll_derive(\"%s\"):\n"
+		                "ll does not automatically implement for %s, "
+		                "you must implement zero, add and format\n", T, T);
+		return NULL;
+	}
+}
+// methods
+char *ll_new(const char *T) {
+	return ctt_format(TYPE"_%s_new()", T);
+}
+char *ll_sum(const char *T) {
+	return ctt_format(TYPE"_%s_sum", T);
+}
+char *ll_push(const char *T) {
+	return ctt_format(TYPE"_%s_push", T);
 }
 }#
 #define CTIMEUTILS_IMPLEMENTATION
 #include "ctime_utils.h"
 #include <stdio.h>
 
-int $( ll_zero_trait("int") )$ ()
-	{ return 0; }
-int $( ll_add_trait("int") )$ (int a, int b)
-	{ return a + b; }
-char* $( ll_format_trait("int") )$ (int k)
-	{ return format("%d", k); }
-$( ll_template("int") )$
+$( ll_derive("int") )$
+$(1 ll_template("int") 1)$
 
 float $( ll_zero_trait("float") )$ ()
 	{ return 10.0; } // trait misuse!
-float $( ll_add_trait("float") )$ (float x, float y)
+float $( ll_add_trait("float") )$ (float x, const float y)
 	{ return x + y; }
 char* $( ll_format_trait("float") )$ (float x)
-	{ return format("%f", x); }
-$( ll_template("float") )$
+	{ return ctt_format("%f", x); }
+$(1 ll_template("float") 1)$
 
 #include <string.h>
 typedef struct cstr {
 	char* s;
 } cstr;
 cstr $( ll_zero_trait("cstr") )$ ()
-	{ return (cstr) { .s = "" }; }
-cstr $( ll_add_trait("cstr") )$ (cstr s1, const cstr s2)
 	{
 		char *s = malloc(1);
 		*s = '\0';
-		strcat(s, s1.s);
-		strcat(s, s2.s);
-		return (cstr) { .s=s };
+		return (cstr) { .s = s };
 	}
+cstr $( ll_add_trait("cstr") )$ (cstr s1, const cstr s2)
+	{ strcat(s1.s, s2.s); return s1; }
 char* $( ll_format_trait("cstr") )$ (cstr s)
 	{ return s.s; }
-$( ll_template("cstr") )$
+$(1 ll_template("cstr") 1)$
 
 int main() {
 	$( ll("int") )$ intlist = $( ll_new("int") )$;

@@ -1,19 +1,18 @@
 /*
-  This lexical granularity is a bit overkill for the current design where comptime def and insertion are completely separate.
-  But in the future I may want to layer higher levels of comptime, for which this would be needed for using a different layer's $( )$.
-  Also C comments/CPP comments/strings/chars is a pain.
+  #{N N}# $(N N)$ are tokens, but the N can be missing for an implicit 0
 */
 
 #include "lexer.h"
 #include "buffer.h"
 #include "ctime_utils.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 
-Token token_new(TokenType type, char *data) {
-	return (Token) { .type = type, .string_data = data };
+Token token_new(TokenType type, int layer, char *data) {
+	return (Token) { .type = type, .scope = layer, .string_data = data };
 }
 
 void token_free(Token tok) {
@@ -23,7 +22,7 @@ void token_free(Token tok) {
 }
 
 char *token_to_str(Token tok) {
-	return format("%s: [\n%s\n]", TOKENTYPE_TO_STR[tok.type], tok.string_data);
+	return ctt_format("%s: [\n%s\n]", TOKENTYPE_TO_STR[tok.type], tok.string_data);
 }
 
 struct Lexer {
@@ -32,17 +31,15 @@ struct Lexer {
 	Buffer *buffer;
 };
 
-static void fatal(const char *msg) {
-	fprintf(stderr, "%s\n", msg);
-	exit(1);
-}
-
 Lexer *lexer_new(FILE *in_stream) {
 	Lexer *lex = malloc(sizeof(*lex));
-	if (!lex) fatal("out of memory");
+	if (!lex) {
+		fprintf(stderr, "out of memory\n");
+		return NULL;
+	}
 	*lex = (Lexer) {
 		.in_stream = in_stream,
-		.next = token_new(TOKEN_NONE, NULL),
+		.next = token_new(TOKEN_NONE, -2, NULL),
 		.buffer = buffer_new(),
 	};
 	return lex;
@@ -65,27 +62,61 @@ void lexer_free(Lexer *lex) {
 	/* clear down to previous string */ \
 	buffer_pop_end(lex->buffer); \
 	buffer_pop_end(lex->buffer); \
+	/* take the scope number from the token */ \
+	if (TYPE == TOKEN_CTIMEDEF_END || TYPE == TOKEN_INSERTION_END) { \
+		Buffer *tmpbuf = buffer_new(); \
+		while (lex->buffer->len > 0) { \
+			if (isdigit(prev = buffer_pop_end(lex->buffer))) { \
+				buffer_append_char(tmpbuf, prev); \
+			} else { \
+				buffer_append_char(lex->buffer, prev); \
+				break; \
+			} \
+		} \
+		layer_str = buffer_to_cstr(tmpbuf);	\
+		if (strlen(layer_str) > 0) \
+			layer = atoi(layer_str); \
+		else \
+			layer = 0; /* empty number is implicit 0 */ \
+		buffer_free(tmpbuf); \
+	} \
+	if (TYPE == TOKEN_CTIMEDEF_START || TYPE == TOKEN_INSERTION_START) { \
+		Buffer *tmpbuf = buffer_new(); \
+		c = fgetc(lex->in_stream); \
+		while (isdigit(c)) { \
+			buffer_append_char(tmpbuf, c); \
+			c = fgetc(lex->in_stream); \
+		} \
+		ungetc(c, lex->in_stream); \
+		layer_str = buffer_to_cstr(tmpbuf); \
+		if (strlen(layer_str) > 0) \
+			layer = atoi(layer_str); \
+		else \
+			layer = 0; \
+		buffer_free(tmpbuf); \
+	} \
 	if (lex->buffer->len == 0) { /* no string before */ \
-		return token_new(TYPE, NULL); \
+		return token_new(TYPE, layer, NULL); \
 	} \
 	s = buffer_to_cstr(lex->buffer); \
 	buffer_clear(lex->buffer); \
-	lex->next = (Token) { .type = TYPE, .string_data = NULL }; \
-	return token_new(TOKEN_STRING, s);
+	/* string before, return it and queue this token */ \
+	lex->next = token_new(TYPE, layer, NULL); \
+	return token_new(TOKEN_STRING, -1, s);
 
 Token lexer_next(Lexer *lex) {
 	/* lexer holds up to 1 token queued */
 	if (lex->next.type != TOKEN_NONE) {
 		Token t = lex->next;
-		lex->next = (Token) { TOKEN_NONE, NULL };
+		lex->next = token_new(TOKEN_NONE, -2, NULL);
 		return t;
 	}
 	/* State machine */
 	enum {
 		S_CSOURCE,
 		S_CSOURCE_CHAR, /*  '  */
-		S_CSOURCE_CHAR_ESCAPE, /*  '\  */
-		S_CSOURCE_CHAR_DONE, /*  '\_  */
+		S_CSOURCE_CHAR_ESCAPE, /*  '\   */
+		S_CSOURCE_CHAR_DONE, /*  '\_   */
 		S_CSTRLIT,
 		S_CSTRLIT_ESCAPE,
 		S_HASH,
@@ -98,7 +129,10 @@ Token lexer_next(Lexer *lex) {
 		S_CPP_COMMENT,
 	} state = S_CSOURCE;
 
+	char prev;
 	char *s;
+	char *layer_str;
+	int layer;
 	int c;
 	while ((c = fgetc(lex->in_stream)) != EOF) {
 		buffer_append_char(lex->buffer, (char) c);
@@ -217,7 +251,8 @@ Token lexer_next(Lexer *lex) {
 	if (lex->buffer->len > 0) {
 		char *final_source = buffer_to_cstr(lex->buffer);
 		buffer_clear(lex->buffer);
-		return (Token) { .type = TOKEN_STRING, final_source };
+		return token_new(TOKEN_STRING, -1, final_source);
 	}
-	return (Token) { .type = TOKEN_EOF, NULL };
+	return token_new(TOKEN_EOF, -1, NULL);
 }
+

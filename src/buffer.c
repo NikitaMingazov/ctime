@@ -27,7 +27,10 @@ void buffer_clear(Buffer *buf) {
 	buf->len = 0;
 }
 
+// returns \0 if empty
 char buffer_pop_end(Buffer *buf) {
+	if (buf->len == 0)
+		return '\0';
 	char c = buf->data[buf->len-1];
 	buf->len--;
 	return c;

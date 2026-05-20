@@ -31,6 +31,8 @@ static char *TOKENTYPE_TO_STR[] = {
 
 typedef struct {
 	TokenType type;
+	// not read for target source tokens
+	int scope;
 	char *string_data;
 } Token;
 
@@ -44,3 +46,4 @@ void token_free(Token tok);
 char *token_to_str(Token tok);
 
 #endif
+
