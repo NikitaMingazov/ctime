@@ -7,74 +7,81 @@
 #define CTIMEUTILS_IMPLEMENTATION
 #include "ctime_utils.h"
 // type symbol
-char *ll(const char *T);
+ctt_str ll(const char *T);
 // required trait symbols
 // () -> T
-char *ll_zero_trait(const char *T);
+ctt_str ll_zero_trait(const char *T);
 // (T, const T) -> T
-char *ll_add_trait(const char *T);
+ctt_str ll_add_trait(const char *T);
 // T -> char*
-char *ll_format_trait(const char *T);
+ctt_str ll_format_trait(const char *T);
 // auto derivation for int only
-char *ll_derive(const char *T);
+ctt_str ll_derive(const char *T);
 // method symbols
 // () -> ll<T>
-char *ll_new(const char *T);
+ctt_str ll_new(const char *T);
 // (ll<T>) -> T
-char *ll_sum(const char *T);
+ctt_str ll_sum(const char *T);
 // (ll<T>, T) -> ()
-char *ll_push(const char *T);
+ctt_str ll_push(const char *T);
 }#
 #{1
-const char *ll_template(const char *T);
+#define CTIMEUTILS_IMPLEMENTATION
+#include "ctime_utils.h"
+ctt_str ll_template(const char *T);
 1}#
 #{
 // implementation
-#define TYPE "_z3_ll"
-const char *ll_template_str =
-"#include <stdlib.h>\n"
-"typedef struct node_%s {\n"
-"	struct node_%s *next;\n"
-"	%s data;\n"
-"} node_%s;\n"
-"typedef struct "TYPE"_%s {\n"
-"	struct node_%s *head;\n"
-"	int len;\n"
-"} "TYPE"_%s;\n"
-""TYPE"_%s *"TYPE"_%s_new() {\n"
-"	"TYPE"_%s *L = malloc(sizeof(*L));\n"
-"	*L = ("TYPE"_%s) { NULL, 0 };\n"
-"	return L;\n"
-"}\n"
-"void "TYPE"_%s_push("TYPE"_%s *L, %s v) {\n"
-"	node_%s *N = malloc(sizeof(*N));\n"
-"	*N = (node_%s) {\n"
-"		.next = L->head,\n"
-"		.data = v\n"
-"	};\n"
-"	L->head = N;\n"
-"	L->len++;\n"
-"}\n"
-"%s "TYPE"_%s_sum_inner("TYPE"_%s *L) {\n"
-"	%s acc = "TYPE"_%s_zero();\n"
-"	node_%s *cur = L->head;\n"
-"	while (cur) {\n"
-"		acc = "TYPE"_%s_add(acc, cur->data);\n"
-"		cur = cur->next;\n"
-"	}\n"
-"	return acc;\n"
-"}\n"
-"char *"TYPE"_%s_sum("TYPE"_%s *L) {\n"
-"	%s sum = "TYPE"_%s_sum_inner(L);\n"
-"	return "TYPE"_%s_format(sum);\n"
-"}\n";
+const char *ll_template_quote =
+'{
+#include <stdlib.h>
+typedef struct node_%T {
+	struct node_%T *next;
+	%T data;
+} node_%T;
+typedef struct %LL_%T {
+	struct node_%T *head;
+	int len;
+} %LL_%T;
+%LL_%T *%LL_%T_new() {
+	%LL_%T *L = malloc(sizeof(*L));
+		*L = (%LL_%T) { NULL, 0 };
+	return L;
+}
+void %LL_%T_push(%LL_%T *L, %T v) {
+	node_%T *N = malloc(sizeof(*N));
+	*N = (node_%T) {
+		.next = L->head,
+		.data = v
+	};
+	L->head = N;
+	L->len++;
+}
+%T %LL_%T_sum_inner(%LL_%T *L) {
+	%T acc = %LL_%T_zero();
+	node_%T *cur = L->head;
+	while (cur) {
+		acc = %LL_%T_add(acc, cur->data);
+		cur = cur->next;
+	}
+	return acc;
+}
+char *%LL_%T_sum(%LL_%T *L) {
+	%T sum = %LL_%T_sum_inner(L);
+	return %LL_%T_format(sum);
+}
+}' ;
+
+ctt_str ll_template_fn() {
+	return ctt_substr_replace(ctt_substr_replace(ll_template_quote, "%LL", "_z3_ll"), "%T", "%s");
+}
 
 #include <string.h>
 #include <stdlib.h>
 
 
 // T,T,T...T,T
-const char *n_Ts(const int n) {
+char *n_Ts(const int n) {
 	// char *s = malloc(1); // TODO: check what assembly looks like for this
 	char *s = malloc(2*n);
 	for (int i = 0; i < 2*n; i += 2) {
@@ -89,12 +96,10 @@ const char *n_Ts(const int n) {
 
 }#
 #{1
-#define CTIMEUTILS_IMPLEMENTATION
-#include "ctime_utils.h"
-const char *ll_template(const char *T) {
+ctt_str ll_template(const char *T) {
 	return ctt_format(
-		$( ctt_format("\"%s\"", ctt_quote(ll_template_str)) )$,
-		$( n_Ts(ctt_substr_count(ll_template_str, "%s")) )$
+		$( ctt_format("\"%s\"", ctt_quote(ll_template_fn())) )$,
+		$( n_Ts(ctt_substr_count(ll_template_fn(), "%s")) )$
 	);
 }
 1}#
@@ -102,24 +107,24 @@ const char *ll_template(const char *T) {
 #include <stdio.h>
 #define TYPE "_z3_ll"
 // type name
-char *ll(const char *T) {
+ctt_str ll(const char *T) {
 	return ctt_format(TYPE"_%s*", T);
 }
 // required traits
 // () -> T
-char *ll_zero_trait(const char *T) {
+ctt_str ll_zero_trait(const char *T) {
 	return ctt_format(TYPE"_%s_zero", T);
 }
 // (T, const T) -> T
-char *ll_add_trait(const char *T) {
+ctt_str ll_add_trait(const char *T) {
 	return ctt_format(TYPE"_%s_add", T);
 }
 // T -> char*
-char *ll_format_trait(const char *T) {
+ctt_str ll_format_trait(const char *T) {
 	return ctt_format(TYPE"_%s_format", T);
 }
 // auto derivations
-char *ll_derive(const char *T) {
+ctt_str ll_derive(const char *T) {
 	if (memcmp(T, "int", strlen(T)) == 0) {
 		return ctt_format(
 "int %s () { return 0; }\n"
@@ -136,13 +141,13 @@ char *ll_derive(const char *T) {
 	}
 }
 // methods
-char *ll_new(const char *T) {
+ctt_str ll_new(const char *T) {
 	return ctt_format(TYPE"_%s_new()", T);
 }
-char *ll_sum(const char *T) {
+ctt_str ll_sum(const char *T) {
 	return ctt_format(TYPE"_%s_sum", T);
 }
-char *ll_push(const char *T) {
+ctt_str ll_push(const char *T) {
 	return ctt_format(TYPE"_%s_push", T);
 }
 }#

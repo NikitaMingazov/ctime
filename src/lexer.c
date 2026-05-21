@@ -59,9 +59,19 @@ void lexer_free(Lexer *lex) {
 
 #define PUSH_TOKEN(TYPE) \
 	state = S_CSOURCE; \
+	if (TYPE == TOKEN_QUOTE_START) { \
+		next = buffer_pop_end(lex->buffer); \
+	} \
 	/* clear down to previous string */ \
 	buffer_pop_end(lex->buffer); \
 	buffer_pop_end(lex->buffer); \
+	if (TYPE == TOKEN_QUOTE_START) { \
+		ungetc(next, lex->in_stream); \
+	} \
+	/* a quote's layer is never read */ \
+	if (TYPE == TOKEN_QUOTE_START || TYPE == TOKEN_QUOTE_END) { \
+		layer = -3; \
+	} \
 	/* take the scope number from the token */ \
 	if (TYPE == TOKEN_CTIMEDEF_END || TYPE == TOKEN_INSERTION_END) { \
 		Buffer *tmpbuf = buffer_new(); \
@@ -115,6 +125,7 @@ Token lexer_next(Lexer *lex) {
 	enum {
 		S_CSOURCE,
 		S_CSOURCE_CHAR, /*  '  */
+		S_CSOURCE_CHAR_LCURL, /*  '{  */
 		S_CSOURCE_CHAR_ESCAPE, /*  '\   */
 		S_CSOURCE_CHAR_DONE, /*  '\_   */
 		S_CSTRLIT,
@@ -129,6 +140,7 @@ Token lexer_next(Lexer *lex) {
 		S_CPP_COMMENT,
 	} state = S_CSOURCE;
 
+	char next;
 	char prev;
 	char *s;
 	char *layer_str;
@@ -164,6 +176,8 @@ Token lexer_next(Lexer *lex) {
 				switch (c) {
 					case '#':
 						PUSH_TOKEN(TOKEN_CTIMEDEF_END)
+					case '\'':
+						PUSH_TOKEN(TOKEN_QUOTE_END)
 					default:
 						state = S_CSOURCE;
 						goto epsilon;
@@ -230,10 +244,21 @@ Token lexer_next(Lexer *lex) {
 				break;
 
 			case S_CSOURCE_CHAR:
-				if (c == '\\') {
+				if (c == '{') {
+					state = S_CSOURCE_CHAR_LCURL;
+				} else if (c == '\\') {
 					state = S_CSOURCE_CHAR_ESCAPE;
 				} else {
 					state = S_CSOURCE_CHAR_DONE;
+				}
+				break;
+
+			case S_CSOURCE_CHAR_LCURL:
+				if (c != '\'') {
+					PUSH_TOKEN(TOKEN_QUOTE_START)
+				} else {
+					state = S_CSOURCE;
+					goto epsilon;
 				}
 				break;
 

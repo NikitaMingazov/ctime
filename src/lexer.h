@@ -12,6 +12,8 @@
 typedef enum {
 	TOKEN_NONE, // option<token>
 	TOKEN_STRING,
+	TOKEN_QUOTE_START,
+	TOKEN_QUOTE_END,
 	TOKEN_CTIMEDEF_START,
 	TOKEN_CTIMEDEF_END,
 	TOKEN_INSERTION_START,
@@ -22,6 +24,8 @@ typedef enum {
 static char *TOKENTYPE_TO_STR[] = {
 	"none",
 	"string",
+	"'{",
+	"}'",
 	"#{",
 	"}#",
 	"$(",

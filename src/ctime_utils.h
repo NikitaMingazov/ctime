@@ -7,12 +7,12 @@
 #include <stdarg.h>
 #include <stddef.h>
 
-// the type returned by insertion macros
-typedef const char* ctt_str;
-
-// I might make a new type to return more metadata to the transpiler
+// I might make a new type to return more information to the transpiler
 // As far as I have in mind, NULL for error is sufficient
-// But this interface will always be valid
+// But this API will always be valid
+
+// the type returned by insertion macros
+#define ctt_str char*
 
 // Returns a string for use in macros (currently just a normal char*)
 #define ctt_return(STR) \
@@ -23,7 +23,7 @@ typedef const char* ctt_str;
 #define ctt_assert(BOOL, STR) \
 	do { \
 		if (!BOOL) { \
-			fprintf(stderr, "%s\n", STR); \
+			fprintf(stderr, "assertion failed: %s\n", STR); \
 			return (ctt_str)NULL; \
 		} \
 	} while {0}
@@ -35,7 +35,7 @@ typedef const char* ctt_str;
 
 // useful functions
 
-// returns a string that when printed, is identical to "s" minus the ""
+// returns a string that when printed, is identical to itself as source code minus the ""
 char *ctt_quote(const char *s);
 
 // returns a new formatted string

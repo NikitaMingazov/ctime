@@ -5,8 +5,10 @@
 #include <stddef.h>
 
 typedef enum block_type {
+	B_SOURCE_QUOTE,
 	B_SOURCE_CODE,
 	B_SOURCE_INSERT,
+	B_INSERTION_ORIGIN_HOOK,
 } block_type;
 
 typedef struct source_block {

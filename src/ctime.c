@@ -2,9 +2,6 @@
    Implementation of the transpiler
 */
 
-// for $(  )$, the format is
-// "const char *__comptime_%d() { return %s; }\n", counter, expr
-
 #define CTIMEUTILS_IMPLEMENTATION
 #include "ctime_utils.h"
 
@@ -46,6 +43,11 @@ static char *transpiled_comptime_layer(code_blocks *code, TCCState **comptime_ob
 		source_block block = code_arr[i];
 		if (block.type == B_SOURCE_CODE) {
 			buffer_append_cstr(buf, block.data);
+		} else if (block.type == B_INSERTION_ORIGIN_HOOK) {
+			/* only when debugging a single layer should this be visible */
+			if (!with_delimiters) {
+				buffer_append_cstr(buf, block.data);
+			}
 		} else if (block.type == B_SOURCE_INSERT) {
 			if (num_compiled_layers > block.compilation_layer) {
 				/* execute the insertion */
@@ -125,24 +127,32 @@ cleanup:
 	return NULL;
 }
 
-static int emit_code(source_block *code, size_t num_source_blocks, TCCState **comptime_objs, FILE *out) {
-	int nth_insert = 0;
+static int emit_code(source_block *code, size_t num_source_blocks, TCCState **comptime_objs, size_t num_compiled_layers, FILE *out) {
+	int nth_insert = -1; // incremented to 0
 	for (size_t i = 0; i < num_source_blocks; ++i) {
 		if (code[i].type == B_SOURCE_INSERT) {
+			++nth_insert;
 			size_t layer = code[i].compilation_layer;
-			// todo: factor out __comptime_insert_
-			char *fname = ctt_format("__comptime_insert_target_%d", nth_insert++);
-			char *(*insertion_string_fn)(void) = tcc_get_symbol(comptime_objs[layer], fname);
-			char *insert = insertion_string_fn();
-			if (!insert) {
-				fprintf(stderr, "Error occured in %s from layer %zu called within the target code\n", fname, layer);
-				return 1;
+			if (layer < num_compiled_layers) {
+				// todo: factor out __comptime_insert_
+				char *fname = ctt_format("__comptime_insert_target_%d", nth_insert);
+				char *(*insertion_string_fn)(void) = tcc_get_symbol(comptime_objs[layer], fname);
+				char *insert = insertion_string_fn();
+				if (!insert) {
+					fprintf(stderr, "Error occured in %s from layer %zu called within the target code\n", fname, layer);
+					return 1;
+				}
+				fprintf(out, "%s", insert);
+				/* NULL => runtime string, non-NULL => static string */
+				if (!code[i].data)
+					free(insert);
+				free(fname);
+			} else {
+				int decremented = layer - num_compiled_layers;
+				char *insertion_code = ctt_format("$(%d %s %d)$", decremented, code[i].data, decremented);
+				fprintf(out, "%s", insertion_code);
+				free(insertion_code);
 			}
-			fprintf(out, "%s", insert);
-			/* NULL => runtime string, non-NULL => static string */
-			if (!code[i].data)
-				free(insert);
-			free(fname);
 		} else if (code[i].type == B_SOURCE_CODE) {
 			fprintf(out, "%s", code[i].data);
 		}
@@ -161,6 +171,10 @@ int transpile_ct(CTime_Args *args) {
 	for (size_t layer = 0; layer < layers_to_transpile; ++layer) {
 		char *transpiled_source = transpiled_comptime_layer(&code, comptime_objs, layer, layer, false);
 		if (!transpiled_source) return 1;
+		if (*transpiled_source)
+			fprintf(stderr, "Transpiling layer %zu\n", layer);
+		else
+			fprintf(stderr, "Layer %zu is empty\n", layer);
 		comptime_objs[layer] = compile_layer(transpiled_source, layer, args->include_dirs);
 		if (!comptime_objs[layer]) {
 			/* compile_layer already prints error messages */
@@ -189,8 +203,10 @@ int transpile_ct(CTime_Args *args) {
 	}
 	/* the normal path */
 	else if (uncompiled_comptime_layers == 0) {
-		int r = emit_code(code.source_code, code.num_blocks_in_source, comptime_objs, args->out_stream);
+		fprintf(stderr, "Transpiling target C code\n");
+		int r = emit_code(code.source_code, code.num_blocks_in_source, comptime_objs, code.num_comptime_layers, args->out_stream);
 		if (r) return 1;
+		fprintf(stderr, "Transpilation complete\n");
 	} else {
 		/* printing of incomplete transpilation (arg: '-N k') */
 		/* TODO: a source map to reconstruct unconcatenated partial transpilations */
@@ -201,7 +217,7 @@ int transpile_ct(CTime_Args *args) {
 			fprintf(args->out_stream, "%s", cur_layer);
 			free(cur_layer);
 		}
-		int r = emit_code(code.source_code, code.num_blocks_in_source, comptime_objs, args->out_stream);
+		int r = emit_code(code.source_code, code.num_blocks_in_source, comptime_objs, args->transpile_n_layers, args->out_stream);
 		if (r) return 1;
 	}
 
