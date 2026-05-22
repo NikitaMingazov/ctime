@@ -1,0 +1,22 @@
+/*
+   A few edgecases for parsing.
+   (I used to use /*# amd /*$ syntax, which was horrid)
+*/
+
+#include <stdio.h>
+
+// these are tokens #{ }# $( )$
+/* but they're in a comment so it's fine! */
+// "
+/* as is this #{ $( */
+/* " */
+
+int main() {
+	if ('\\' < '"') // this should be inserted
+		puts("less");
+	// #{
+	// this should remain
+	// }#
+	puts("\\\\\" #{ }# $( )$ \\");
+	return 0;
+}

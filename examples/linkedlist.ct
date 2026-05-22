@@ -3,9 +3,9 @@
    implement higher level language features such as type-aware macros
 */
 #{
+// I know about C++ but this context is pure C
+#include <ctime.h>
 // header
-#define CTIMEUTILS_IMPLEMENTATION
-#include "ctime_utils.h"
 // type symbol
 ctt_str ll(const char *T);
 // required trait symbols
@@ -26,8 +26,7 @@ ctt_str ll_sum(const char *T);
 ctt_str ll_push(const char *T);
 }#
 #{1
-#define CTIMEUTILS_IMPLEMENTATION
-#include "ctime_utils.h"
+#include <ctime.h>
 ctt_str ll_template(const char *T);
 1}#
 #{
@@ -73,7 +72,7 @@ char *%LL_%T_sum(%LL_%T *L) {
 }' ;
 
 ctt_str ll_template_fn() {
-	return ctt_substr_replace(ctt_substr_replace(ll_template_quote, "%LL", "_z3_ll"), "%T", "%s");
+	return ct_substr_replace(ct_substr_replace(ll_template_quote, "%LL", "_z3_ll"), "%T", "%s");
 }
 
 #include <string.h>
@@ -97,9 +96,9 @@ char *n_Ts(const int n) {
 }#
 #{1
 ctt_str ll_template(const char *T) {
-	return ctt_format(
-		$( ctt_format("\"%s\"", ctt_quote(ll_template_fn())) )$,
-		$( n_Ts(ctt_substr_count(ll_template_fn(), "%s")) )$
+	return ct_format(
+		$( ct_format("\"%s\"", ct_quote(ll_template_fn())) )$,
+		$( n_Ts(ct_substr_count(ll_template_fn(), "%s")) )$
 	);
 }
 1}#
@@ -108,28 +107,28 @@ ctt_str ll_template(const char *T) {
 #define TYPE "_z3_ll"
 // type name
 ctt_str ll(const char *T) {
-	return ctt_format(TYPE"_%s*", T);
+	return ct_format(TYPE"_%s*", T);
 }
 // required traits
 // () -> T
 ctt_str ll_zero_trait(const char *T) {
-	return ctt_format(TYPE"_%s_zero", T);
+	return ct_format(TYPE"_%s_zero", T);
 }
 // (T, const T) -> T
 ctt_str ll_add_trait(const char *T) {
-	return ctt_format(TYPE"_%s_add", T);
+	return ct_format(TYPE"_%s_add", T);
 }
 // T -> char*
 ctt_str ll_format_trait(const char *T) {
-	return ctt_format(TYPE"_%s_format", T);
+	return ct_format(TYPE"_%s_format", T);
 }
 // auto derivations
 ctt_str ll_derive(const char *T) {
 	if (memcmp(T, "int", strlen(T)) == 0) {
-		return ctt_format(
+		return ct_format(
 "int %s () { return 0; }\n"
 "int %s (int a, const int b) { return a + b; }\n"
-"char* %s (int k) { return ctt_format(\"%%d\", k); }\n",
+"char* %s (int k) { return ct_format(\"%%d\", k); }\n",
 		ll_zero_trait("int"),
 		ll_add_trait("int"),
 		ll_format_trait("int"));
@@ -142,17 +141,17 @@ ctt_str ll_derive(const char *T) {
 }
 // methods
 ctt_str ll_new(const char *T) {
-	return ctt_format(TYPE"_%s_new()", T);
+	return ct_format(TYPE"_%s_new()", T);
 }
 ctt_str ll_sum(const char *T) {
-	return ctt_format(TYPE"_%s_sum", T);
+	return ct_format(TYPE"_%s_sum", T);
 }
 ctt_str ll_push(const char *T) {
-	return ctt_format(TYPE"_%s_push", T);
+	return ct_format(TYPE"_%s_push", T);
 }
 }#
-#define CTIMEUTILS_IMPLEMENTATION
-#include "ctime_utils.h"
+#define CTIME_IMPLEMENTATION
+#include "ctime.h"
 #include <stdio.h>
 
 $( ll_derive("int") )$
@@ -163,7 +162,7 @@ float $( ll_zero_trait("float") )$ ()
 float $( ll_add_trait("float") )$ (float x, const float y)
 	{ return x + y; }
 char* $( ll_format_trait("float") )$ (float x)
-	{ return ctt_format("%f", x); }
+	{ return ct_format("%f", x); }
 $(1 ll_template("float") 1)$
 
 #include <string.h>

@@ -1,9 +1,9 @@
 #{
-#define CTIMEUTILS_IMPLEMENTATION
-#include "ctime_utils.h"
+#define CTIME_IMPLEMENTATION
+#include "ctime.h"
 char *comptime_sum(int a, int b) {
 	int result = a + b;
-	char *s = format("%d", result);
+	char *s = ct_format("%d", result);
 	return s;
 }
 }#

@@ -4,7 +4,7 @@
 */
 #include "parser.h"
 #include "lexer.h"
-#include "ctime_utils.h"
+#include "ctime.h"
 #include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -113,12 +113,12 @@ code_blocks parse_into_blocks(Lexer *lex) {
 						layer_tails[parent_scope] = block_list_append(layer_tails[parent_scope], make_block(parent_scope, B_SOURCE_CODE, tok.string_data));
 					} else if (tok.type == TOKEN_QUOTE_START) {
 						tok = match(lex, TOKEN_STRING);
-						layer_tails[parent_scope] = block_list_append(layer_tails[parent_scope], make_block(parent_scope, B_SOURCE_CODE, ctt_format("\"%s\"", ctt_quote(tok.string_data))));
+						layer_tails[parent_scope] = block_list_append(layer_tails[parent_scope], make_block(parent_scope, B_SOURCE_CODE, ct_format("\"%s\"", ct_quote(tok.string_data))));
 						match(lex, TOKEN_QUOTE_END);
 					} else if (tok.type == TOKEN_INSERTION_START) {
 						UPDATE_SCOPE
 						tok = match(lex, TOKEN_STRING);
-						return_expr_fn = ctt_format("char *__comptime_insert_layer%d_%d() { return %s; }\n", parent_scope, insert_counters[parent_scope]++, tok.string_data);
+						return_expr_fn = ct_format("char *__comptime_insert_layer%d_%d() { return %s; }\n", parent_scope, insert_counters[parent_scope]++, tok.string_data);
 						layer_tails[scope] = block_list_append(layer_tails[scope], make_block(scope, B_INSERTION_ORIGIN_HOOK, return_expr_fn));
 						layer_tails[parent_scope] = block_list_append(layer_tails[parent_scope], make_block(scope, B_SOURCE_INSERT, tok.string_data));
 						tok = match(lex, TOKEN_INSERTION_END);
@@ -144,7 +144,7 @@ code_blocks parse_into_blocks(Lexer *lex) {
 				UPDATE_SCOPE
 				tok = match(lex, TOKEN_STRING);
 				/* only 1 digit means it is inserting into runtime source */
-				return_expr_fn = ctt_format("char *__comptime_insert_target_%d() { return %s; }\n", source_insert_counter++, tok.string_data);
+				return_expr_fn = ct_format("char *__comptime_insert_target_%d() { return %s; }\n", source_insert_counter++, tok.string_data);
 				layer_tails[scope] = block_list_append(layer_tails[scope], make_block(scope, B_INSERTION_ORIGIN_HOOK, return_expr_fn));
 				source_tail = block_list_append(source_tail, make_block(scope, B_SOURCE_INSERT, tok.string_data));
 				tok = match(lex, TOKEN_INSERTION_END);

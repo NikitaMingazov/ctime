@@ -4,7 +4,7 @@
 
 #include "lexer.h"
 #include "buffer.h"
-#include "ctime_utils.h"
+#include "ctime.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,7 +22,7 @@ void token_free(Token tok) {
 }
 
 char *token_to_str(Token tok) {
-	return ctt_format("%s: [\n%s\n]", TOKENTYPE_TO_STR[tok.type], tok.string_data);
+	return ct_format("%s: [\n%s\n]", TOKENTYPE_TO_STR[tok.type], tok.string_data);
 }
 
 struct Lexer {
