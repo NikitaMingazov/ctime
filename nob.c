@@ -14,6 +14,7 @@
 	PRE(POST("main")) \
 	PRE(POST("buffer")) \
 	PRE(POST("ctt")) \
+	PRE(POST("comptime-backend")) \
 	PRE(POST("parser")) \
 	PRE(POST("lexer"))
 

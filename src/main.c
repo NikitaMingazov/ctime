@@ -1,9 +1,7 @@
 // CLI interface for the ctime transpiler
 
-// nob supposedly also has portable filesystem utilities
-// but needing to define posix source is concerning, I may raise an issue
-// TODO: make nob compile main.c with 'cc' because it is the only unportable C here
 #define NOB_TEMP_CAPACITY 256
+#define NOB_NO_ECHO
 #define _POSIX_C_SOURCE 200809L
 #define NOB_IMPLEMENTATION
 #include "../nob.h"
@@ -17,7 +15,7 @@
 #include <string.h>
 #include <stdint.h>
 
-/* TODO: in addition to -d, have a -g that produces layer N as a compilable .c with original line origins and a build script with accompanying layerN_artifacts/layer_[0..N-1).{h,c}
+/* TODO: in addition to -d, have a -g that produces layer N as a compilable .c with original line origins instead of live insertions, a build script using ctt with accompanying layerN_artifacts/layer_[0..N-1).{h,c}
    and the target program with .ct lines in the source? */
 
 static const char *msg =
@@ -29,11 +27,13 @@ static const char *msg =
 "                     (those that remain are decremented in output)\n"
 "   -d              print only the code about to be compiled\n"
 "                     (requires -N)\n"
+"   -cc <cc>        use <cc> as the compiler backend instead of libtcc\n"
+"   -a <arg>        pass an arbitrary argument into cc\n"
 "   -I <dir>        also search <dir> for .h files\n"
 "   -L <dir>        also search <dir> for .so files\n"
 "   -l<name>        include lib<name>.so in linking\n"
 "   -D <def>        pass #define <def> to the comptime preprocessor\n"
-"                     ('-D primus=2' corresponds to #define primus 2)"
+"                     ('-D primus=2' corresponds to #define primus 2)\n"
 "   -h              show this message\n"
 ;
 
@@ -65,9 +65,9 @@ static const char *msg =
 #define ARG_LIST_APPEND_FN(field, fname) \
 	void fname (CTime_Args *args, const char *new_arg, size_t *num_args) { \
 		++*num_args; \
-		args-> field = realloc(args-> field, (*num_args+1) * sizeof(char*)); \
-		args-> field [*num_args-1] = new_arg; \
-		args-> field [*num_args] = NULL; \
+		args->compiler_args-> field = realloc(args->compiler_args-> field, (*num_args+1) * sizeof(char*)); \
+		args->compiler_args-> field [*num_args-1] = new_arg; \
+		args->compiler_args-> field [*num_args] = NULL; \
 	}
 
 // generate functions for appending a string to a field in args
@@ -75,6 +75,7 @@ ARG_LIST_APPEND_FN(include_dirs, append_import)
 ARG_LIST_APPEND_FN(defines, append_define)
 ARG_LIST_APPEND_FN(lib_dirs, append_lib_dir)
 ARG_LIST_APPEND_FN(lib_names, append_lib_name)
+ARG_LIST_APPEND_FN(cc_args, append_cc_arg)
 
 #define INVALID \
 	fprintf(stderr, "%s: invalid option -- %s\n", argv[0], argv[i]); \
@@ -110,15 +111,16 @@ int main(int argc, char **argv) {
 	size_t num_lib_dirs = 0;
 	size_t num_lib_names = 0;
 	size_t num_defines = 0;
+	size_t num_cc_args = 0; // arbitrary arg
 	CTime_Args *args = ctime_default_args();
 	/* if ctt was invoked using a path, look for libctime in that dir */
 	if (strcmp(argv[0], "ctt") != 0) {
 		char *libdir = strdup(nob_temp_dir_name(argv[0]));
 		libdir = realloc(libdir, strlen(libdir) + strlen("/libctime") + 1);
 		strcat(libdir, "/libctime");
-		append_import(args, libdir, &num_includes);
 		append_lib_dir(args, libdir, &num_lib_dirs);
 	}
+	append_lib_name(args, "ctime", &num_lib_names);
 	bool optsdone = false;
 	char *source_path = NULL;
 	for (int i = 1; i < argc; ++i) {
@@ -163,6 +165,19 @@ int main(int argc, char **argv) {
 						INVALID
 					}
 					break;
+				case 'c': // -cc
+					if (!argv[i][2]) {
+						INVALID
+					} else {
+						if (argv[i][2] != 'c' || argv[i][3]) {
+							INVALID
+						}
+						if (!argv[++i]) {
+							PAR_ERR("missing -cc parameter")
+						}
+						args->cc = argv[i];
+					}
+					break;
 				#define DO(ARG) append_import(args, ARG, &num_includes)
 				CASE_CHAR_WITH_PARAMETER('I', "I")
 				#define DO(ARG) append_lib_dir(args, ARG, &num_lib_dirs)
@@ -171,8 +186,10 @@ int main(int argc, char **argv) {
 				CASE_CHAR_WITH_PARAMETER('l', "l")
 				#define DO(ARG) append_define(args, ARG, &num_defines)
 				CASE_CHAR_WITH_PARAMETER('D', "D")
+				#define DO(ARG) append_cc_arg(args, ARG, &num_cc_args)
+				CASE_CHAR_WITH_PARAMETER('a', "a")
 				#define DO(ARG) args->transpile_n_layers = atoi(ARG)
-				CASE_CHAR_WITH_PARAMETER('N', "N")
+				CASE_CHAR_WITH_PARAMETER('N', "N") // duplicate Ns should be an error?
 				case 'd':
 					if (!argv[i][2]) {
 						args->print_comptime = true;

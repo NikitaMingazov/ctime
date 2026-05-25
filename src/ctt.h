@@ -1,19 +1,18 @@
 #ifndef CTIMET_H
 #define CTIMET_H
 
+#include "comptime-backend.h"
+
 #include <stdbool.h>
 #include <stdio.h>
 
 typedef struct ctime_args {
 	FILE *in_stream;
 	FILE *out_stream;
-	const char **include_dirs;
-	const char **lib_dirs;
-	const char **lib_names;
-	const char **defines;
+	const char *cc;
+	struct compiler_args *compiler_args;
 	size_t transpile_n_layers;
 	bool print_comptime;
-
 } CTime_Args;
 
 CTime_Args *ctime_default_args();
