@@ -2,17 +2,18 @@
 #ifndef HEADER
 #define HEADER stddef.h
 #endif
-char *header_sym = '{ HEADER }';
+char *header_name = '{ HEADER }';
 }#
 #{
 // quote blocks are preprocessed before conversion to strings
 // and str insertion is before preprocessing
 char *header_str = '{
-#include <$( header_sym )$>
+	#include <$( header_name )$>
 }' ;
 #include <stdio.h>
 char *main() {
 	fprintf(stderr, header_str);
+	fprintf(stderr, "\n");
 	return "0";
 }
 }#

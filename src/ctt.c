@@ -67,7 +67,7 @@ static char* segfault_safe_call(char *(*unsafe_fn)(void)) {
 		close(pipefd[0]);  // close read end
 		char *comptime_str = unsafe_fn();   // may segfault
 		if (!comptime_str)
-			fprintf(stderr, "Comptime fn returned NULL");
+			fprintf(stderr, "Comptime fn returned NULL\n");
 		size_t len = strlen(comptime_str) + 1;
 		if (write(pipefd[1], &len, sizeof(len)) != sizeof(len)) {
 			_exit(1);

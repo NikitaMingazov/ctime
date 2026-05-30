@@ -8,6 +8,8 @@ A Jai-inspired metaprogramming transpiler for a superset of C. Implemented using
 
 ```cc -o nob nob.c && ./nob``` produces the transpiler binary and the ctime library in builds/
 
+```cc -o nob nob.c && sudo ./nob install``` installs ctt and libctime to /usr on a unix system
+
 libtcc is a dependency, which is usually found in your distro's "tcc" package. I plan to later add to the build script an option to statically link from a tcc git repo, because vendoring tcc is complicated by the GPL.
 
 ## Usage
