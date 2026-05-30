@@ -8,11 +8,13 @@
 #include <stddef.h>
 
 typedef struct compiler_args {
+	// NULL for libtcc in memory
+	const char *cc;
 	const char **include_dirs;
 	const char **lib_dirs;
 	const char **lib_names;
 	const char **defines;
-	// arbitrary args if not otherwise supported
+	// arbitrary args (for non-null cc)
 	const char **cc_args;
 } CompilerArgs;
 
@@ -40,11 +42,11 @@ typedef struct comptime_backend {
 	union backend_data data;
 } ComptimeBackend;
 
-ComptimeBackend *comptime_tcc_compile(const char *source_code, CompilerArgs *args, size_t layer);
-ComptimeBackend *comptime_shell_compile(const char *source_code, const char *cc, CompilerArgs *args, size_t layer);
-
+ComptimeBackend *comptime_compile(const char *source_code, CompilerArgs *args);
 char *(*comptime_get_str_void_fn(ComptimeBackend *be, const char *sym))(void);
-
 void comptime_close(ComptimeBackend *be);
 
+char *comptime_preprocess_str(const char *to_preprocess, CompilerArgs *args);
+
 #endif // CTT_BACKEND_H
+

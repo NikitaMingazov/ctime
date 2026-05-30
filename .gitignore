@@ -1,7 +1,7 @@
 #binaries
 *.o
 ctime
-build/*
+build
 nob
 nob.old*
 # tooling junk

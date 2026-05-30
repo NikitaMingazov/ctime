@@ -6,15 +6,19 @@
 #include <libtcc.h>
 
 #include "../nob.h"
-#include <dlfcn.h>
 
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+#ifdef __unix__
+#include <unistd.h>
+#include <dlfcn.h>
+#endif
 
 #ifdef __unix__
 // build a .so in /tmp to call functions from
-ComptimeBackend *comptime_shell_compile(const char *source_code, const char *cc, CompilerArgs *args, size_t layer) {
+static ComptimeBackend *comptime_shell_compile(const char *source_code, CompilerArgs *args) {
+	const char *cc = args->cc;
 	#define APPEND_STRARR_TO_CMD(ARR, PREFIX) \
 	for (size_t i = 0; ARR[i]; ++i) { \
 		char *arg = ct_format(PREFIX"%s", ARR[i]); \
@@ -26,7 +30,7 @@ ComptimeBackend *comptime_shell_compile(const char *source_code, const char *cc,
 
 	char *tmp_src = malloc(256);
 	*tmp_src = '\0';
-	snprintf(tmp_src, 256, "%s/%d_%zu_XXXXXX.c", tmp_dir, getpid(), layer);
+	snprintf(tmp_src, 256, "%s/%d_XXXXXX.c", tmp_dir, getpid());
    	int fd = mkstemps(tmp_src, 2);
    	if (fd == -1) return NULL;
    	FILE *f = fopen(tmp_src, "w");
@@ -76,13 +80,12 @@ err:
 }
 #else
 ComptimeBackend *comptime_shell_compile(const char *source_code, const char *cc, CompilerArgs *args, size_t layer) {
-	fprintf(stderr, "shell compilation is not supported");
+	fprintf(stderr, "shell compilation is not supported on your platform\n");
 	return NULL;
 }
 #endif // ifdef __unix__
 
-
-ComptimeBackend *comptime_tcc_compile(const char *source_code, CompilerArgs *args, size_t layer) {
+static ComptimeBackend *comptime_tcc_compile(const char *source_code, CompilerArgs *args) {
 	const char **include_dirs = args->include_dirs;
 	const char **lib_dirs = args->lib_dirs;
 	const char **lib_names = args->lib_names;
@@ -120,10 +123,10 @@ ComptimeBackend *comptime_tcc_compile(const char *source_code, CompilerArgs *arg
 		tcc_define_symbol(s, defines[i], NULL);
 	}
 	// Define this macro to indicate that code is in a comptime scope (and which layer)
-	tcc_define_symbol(s, "__COMPTIME_LAYER", ct_format("%zu", layer));
+	tcc_define_symbol(s, "__IS_COMPTIME", NULL);
 	// Compile the comptime string
 	if (tcc_compile_string(s, source_code)) {
-		fprintf(stderr, "Compilation of comptime code failed at layer %zu\n", layer);
+		fprintf(stderr, "Compilation of comptime code failed\n");
 		goto cleanup;
 	}
 	if (tcc_relocate(s) < 0) {
@@ -138,6 +141,85 @@ ComptimeBackend *comptime_tcc_compile(const char *source_code, CompilerArgs *arg
 	return be;
 cleanup:
 	tcc_delete(s);
+	return NULL;
+}
+
+ComptimeBackend *comptime_compile(const char *source_code, CompilerArgs *args) {
+	if (args->cc)
+		return comptime_shell_compile(source_code, args);
+	else
+		return comptime_tcc_compile(source_code, args);
+}
+
+char *read_whole_file(const char *filename) {
+	FILE *f = fopen(filename, "rb");
+	if (!f) return NULL;
+	fseek(f, 0, SEEK_END);
+	long size = ftell(f);
+	rewind(f);
+	char *buffer = malloc(size + 1);
+	if (!buffer) {
+		fclose(f);
+		return NULL;
+	}
+	size_t bytes_read = fread(buffer, 1, size, f);
+	fclose(f);
+    if (bytes_read != (size_t)size) {
+		free(buffer);
+		return NULL;
+	}
+	buffer[size] = '\0';
+	return buffer;
+}
+
+char *comptime_preprocess_str(const char *to_preprocess, CompilerArgs *args) {
+	#define APPEND_STRARR_TO_CMD(ARR, PREFIX) \
+	for (size_t i = 0; ARR[i]; ++i) { \
+		char *arg = ct_format(PREFIX"%s", ARR[i]); \
+		nob_cmd_append(&cmd, arg); \
+	}
+
+	// libtcc doesn't expose a preprocessor
+	const char *cc = args->cc ? args->cc : "tcc";
+
+	const char *tmp_dir = "/tmp/ctime";
+	if (!nob_mkdir_if_not_exists(tmp_dir)) return NULL;
+
+	char *tmp_src = malloc(256);
+	*tmp_src = '\0';
+	snprintf(tmp_src, 256, "%s/%d_XXXXXX.c", tmp_dir, getpid());
+   	int fd = mkstemps(tmp_src, 2);
+   	if (fd == -1) return NULL;
+   	FILE *f = fopen(tmp_src, "w");
+   	if (!f) { close(fd); return NULL; }
+   	fprintf(f, "%s", to_preprocess);
+   	fclose(f);
+
+	char *tmp_target = ct_format("%s.post", tmp_src);
+	Nob_Cmd cmd = {0};
+
+	nob_cmd_append(&cmd, cc, "-E");
+	APPEND_STRARR_TO_CMD(args->defines, "-D")
+	APPEND_STRARR_TO_CMD(args->include_dirs, "-I")
+	// APPEND_STRARR_TO_CMD(args->cc_args, "")
+	nob_cmd_append(&cmd, tmp_src);
+	nob_cmd_append(&cmd, "-o", tmp_target);
+	if (!nob_cmd_run(&cmd)) goto err;
+
+	char *postprocessed = read_whole_file(tmp_target);
+
+	nob_cmd_free(cmd);
+	nob_delete_file(tmp_target);
+	nob_delete_file(tmp_src);
+	free(tmp_target); free(tmp_src);
+	return postprocessed;
+err:
+	if (nob_file_exists(tmp_target))
+		nob_delete_file(tmp_target);
+	if (nob_file_exists(tmp_src))
+		nob_delete_file(tmp_src);
+	free(tmp_target); free(tmp_src);
+	nob_cmd_free(cmd);
 	return NULL;
 }
 
@@ -164,3 +246,4 @@ void comptime_close(ComptimeBackend *be) {
 	}
 	free(be);
 }
+

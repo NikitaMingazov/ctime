@@ -2,11 +2,11 @@
    Implementation of the transpiler
 */
 
-#include "comptime-backend.h"
 #define CTIME_IMPLEMENTATION
 #include "ctime.h"
 
 #include "ctt.h"
+#include "comptime-backend.h"
 #include <libtcc.h>
 #include "buffer.h"
 #include "lexer.h"
@@ -14,9 +14,12 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <stdint.h>
+#include <string.h>
 #ifdef __unix__
+#define UNIX_SEGFAULT_GUARD
+#define HAVE_SEGFAULT_GUARD
+#include <unistd.h>
 #include <signal.h>
 #include <sys/wait.h>
 #endif // ifdef __unix__
@@ -27,8 +30,9 @@ CTime_Args *ctime_default_args() {
 		.in_stream = NULL,
 		.out_stream = NULL,
 		.transpile_n_layers = SIZE_MAX,
-		.cc = NULL,
 		.compiler_args = malloc(sizeof(struct compiler_args)),
+		.tab_width = 4,
+		.print_ast = false,
 	};
 	args->compiler_args->defines = malloc(sizeof(char**));
 	*args->compiler_args->defines = NULL;
@@ -37,13 +41,16 @@ CTime_Args *ctime_default_args() {
 	args->compiler_args->lib_dirs = malloc(sizeof(char**));
 	*args->compiler_args->lib_dirs = NULL;
 	args->compiler_args->lib_names = malloc(sizeof(char**));
+	*args->compiler_args->lib_names = NULL;
 	args->compiler_args->cc_args = malloc(sizeof(char**));
 	*args->compiler_args->cc_args = NULL;
+	args->compiler_args->cc = NULL;
 	return args;
 }
 
-#ifdef __unix__
-static char* segfault_safe_call(char *(*fn)(void)) {
+#ifdef UNIX_SEGFAULT_GUARD
+// forks a new process to call the comptime function from, to catch segfaults
+static char* segfault_safe_call(char *(*unsafe_fn)(void)) {
 	int pipefd[2];
 	if (pipe(pipefd) == -1) {
 		perror("pipe");
@@ -58,7 +65,7 @@ static char* segfault_safe_call(char *(*fn)(void)) {
 	}
 	if (pid == 0) { // Child process
 		close(pipefd[0]);  // close read end
-		char *comptime_str = fn();   // may segfault
+		char *comptime_str = unsafe_fn();   // may segfault
 		if (!comptime_str)
 			fprintf(stderr, "Comptime fn returned NULL");
 		size_t len = strlen(comptime_str) + 1;
@@ -89,204 +96,231 @@ static char* segfault_safe_call(char *(*fn)(void)) {
 			}
 		} else if (WIFSIGNALED(status) && WTERMSIG(status) == SIGSEGV) {
 			fprintf(stderr, "Segfault in comptime function\n");
-		} else {
-			// Other failure (e.g., child called _exit(1) due to write error)
-			fprintf(stderr, "Comptime function failed for unknown reason\n");
+		} else if (WIFEXITED(status)) {
+			// Other failure (e.g., comptime code called _exit(1))
+			fprintf(stderr, "Comptime function exited with status %d\n", WEXITSTATUS(status));
+		} else if (WIFSIGNALED(status)) {
+			fprintf(stderr, "Comptime function killed by signal %d\n", WTERMSIG(status));
 		}
 		close(pipefd[0]);
 		return result;  // may be NULL
 	}
 }
-#endif // ifdef __unix__
+#endif // ifdef UNIX_SEGFAULT_GUARD
 
-static char *transpiled_comptime_layer(code_blocks *code, ComptimeBackend **comptime_objs, size_t layer, size_t num_compiled_layers, bool with_delimiters) {
-	Buffer *buf = buffer_new();
-	source_block *code_arr = code->comptime_layers[layer];
-	size_t code_len = code->num_blocks_in_comptime_layer[layer];
-	int nth_insert = 0;
-	if (with_delimiters) {
-		char *pre = ct_format("#{%zu\n", layer-num_compiled_layers);
-		buffer_append_cstr(buf, pre);
-		free(pre);
+static char *evaluate_expr(Buffer *source_code, const char *expr, CompilerArgs *args) {
+	const size_t code_len = source_code->len;
+	#define eval_symbol_name "__COMPTIME_EVAL"
+	char *eval_fn = ct_format("\nchar* "eval_symbol_name"() { return %s; }", expr);
+	buffer_append_cstr(source_code, eval_fn);
+	buffer_null_terminate(source_code);
+	ComptimeBackend *be = comptime_compile(source_code->data, args);
+	if (!be) {
+		// fprintf(stderr, "compilation error\n");
+		return NULL;
 	}
-	for (size_t i = 0; i < code_len; ++i) {
-		source_block block = code_arr[i];
-		if (block.type == B_SOURCE_CODE) {
-			buffer_append_cstr(buf, block.data);
-		} else if (block.type == B_INSERTION_ORIGIN_HOOK) {
-			/* only when debugging a single layer should this be visible */
-			if (!with_delimiters) {
-				buffer_append_cstr(buf, block.data);
-			}
-		} else if (block.type == B_SOURCE_INSERT) {
-			if (num_compiled_layers > block.compilation_layer) {
-				/* execute the insertion */
-				// todo: factor out __comptime_insert_
-				char *fname = ct_format("__comptime_insert_layer%zu_%d", layer, nth_insert++);
-				char *(*insertion_string_fn)(void) = comptime_get_str_void_fn(comptime_objs[block.compilation_layer], fname);
-				#ifdef __unix__
-					char *insert = segfault_safe_call(insertion_string_fn);
-				#else
-					char *insert = insertion_string_fn();
-				#endif
-				if (!insert) {
-					fprintf(stderr, "Error occurred in %s from layer %zu called by comptime layer %zu\n", fname, block.compilation_layer, layer);
-					return NULL;
-				}
-				buffer_append_cstr(buf, insert);
-				if (!block.data)
-					free(insert);
-
-				free(fname);
-			} else {
-				/* the insertion isn't compiled, only decrement it */
-				if (with_delimiters) {
-					char *post = ct_format("%zu}#\n", layer-num_compiled_layers);
-					buffer_append_cstr(buf, post);
-					free(post);
-				}
-				int decremented = block.compilation_layer - num_compiled_layers;
-				char *insertion_code = ct_format("$(%d %s %d)$", decremented, block.data, decremented);
-				buffer_append_cstr(buf, insertion_code);
-				free(insertion_code);
-				if (with_delimiters) {
-					char *pre = ct_format("#{%zu\n", layer-num_compiled_layers);
-					buffer_append_cstr(buf, pre);
-					free(pre);
-				}
-			}
-		}
-	}
-	if (with_delimiters) {
-		char *post = ct_format("%zu}#\n", layer-num_compiled_layers);
-		buffer_append_cstr(buf, post);
-		free(post);
-	}
-	char *s = buffer_to_cstr(buf);
-	buffer_free(buf);
-	return s;
+	char *(*void_to_str)(void) = comptime_get_str_void_fn(be, eval_symbol_name);
+#ifdef HAVE_SEGFAULT_GUARD
+	char *result = segfault_safe_call(void_to_str);
+#else
+	char *result = void_to_str();
+#endif
+	comptime_close(be);
+	source_code->len = code_len;
+	return result;
 }
 
-static int emit_code(source_block *code, size_t num_source_blocks, ComptimeBackend **comptime_objs, size_t num_compiled_layers, FILE *out) {
-	int nth_insert = -1; // incremented to 0
-	for (size_t i = 0; i < num_source_blocks; ++i) {
-		if (code[i].type == B_SOURCE_INSERT) {
-			++nth_insert;
-			size_t layer = code[i].compilation_layer;
-			if (layer < num_compiled_layers) {
-				// todo: factor out __comptime_insert_
-				char *fname = ct_format("__comptime_insert_target_%d", nth_insert);
-				char *(*insertion_string_fn)(void) = comptime_get_str_void_fn(comptime_objs[layer], fname);
-				#ifdef __unix__
-					char *insert = segfault_safe_call(insertion_string_fn);
-				#else
-					char *insert = insertion_string_fn();
-				#endif
-				if (!insert) {
-					fprintf(stderr, "Error occured in %s from layer %zu called within the target code\n", fname, layer);
-					return 1;
-				}
-				fprintf(out, "%s", insert);
-				/* NULL => runtime string, non-NULL => static string */
-				if (!code[i].data)
-					free(insert);
-				free(fname);
-			} else {
-				int decremented = layer - num_compiled_layers;
-				char *insertion_code = ct_format("$(%d %s %d)$", decremented, code[i].data, decremented);
-				fprintf(out, "%s", insertion_code);
-				free(insertion_code);
-			}
-		} else if (code[i].type == B_SOURCE_CODE) {
-			fprintf(out, "%s", code[i].data);
+// globals that would otherwise be passed in a closure struct
+// but due to this process being serial, there is no parallelism regardless
+unsigned num_insertions;
+size_t max_insertions;
+bool terminated;
+
+static char *resolve_insert_node(const CTimeNode *insert, Buffer *comptime_code, CompilerArgs *args) {
+	Buffer *inner = buffer_new();
+	char *s;
+	for (size_t i = 0; i < insert->num_children; ++i) {
+		const CTimeNode *cur = insert->children[i];
+		switch (cur->type) {
+			case N_SOURCE_CODE:
+				buffer_append_cstr(inner, cur->code);
+				break;
+			case N_INSERT:
+				s = resolve_insert_node(cur, comptime_code, args);
+				if (!s) return NULL;
+				buffer_append_cstr(inner, s);
+				free(s);
+				break;
+			default: return NULL;
 		}
 	}
-	return 0;
+	char *expr = buffer_to_cstr(inner);
+	buffer_free(inner); // TODO: destructive move cstr out method
+	if (terminated)
+		return NULL;
+	if (++num_insertions > max_insertions) {
+		terminated = true;
+		buffer_append_cstr(comptime_code, "\nabout to resolve expr:\n $( ");
+		buffer_append_cstr(comptime_code, expr);
+		buffer_append_cstr(comptime_code, " )$");
+		free(expr);
+		return NULL;
+	}
+	char *insertion = evaluate_expr(comptime_code, expr, args);
+	free(expr);
+	if (!insertion) {
+		fprintf(stderr, "error in insertion %d\n", num_insertions);
+	}
+	return insertion;
+}
+
+static char *preprocessed_str(Buffer *comptime_code, const char *str, CompilerArgs *args) {
+	const size_t code_len = comptime_code->len;
+	const char *sentinel = "__123456789COMPTIME\n";
+	buffer_append_cstr(comptime_code, sentinel);
+	buffer_append_cstr(comptime_code, str);
+	buffer_append_char(comptime_code, '\0');
+	char *preprocessed_code = comptime_preprocess_str(comptime_code->data, args);
+	char *start = strstr(preprocessed_code, sentinel) + strlen(sentinel);
+	size_t len = strlen(start);
+	// strip trailing newline inserted by preprocessor
+	if (len > 0 && start[len-1] == '\n') {
+		start[len-1] = '\0';
+		--len;
+	}
+	char *preprocessed_slice = malloc(len+1);
+	memcpy(preprocessed_slice, start, len);
+	preprocessed_slice[len] = '\0';
+	free(preprocessed_code);
+	comptime_code->len = code_len;
+	return preprocessed_slice;
+}
+
+static char *resolve_quote_node(const CTimeNode *quote_node, Buffer *compilable_code, Buffer *all_seen_code, CompilerArgs *args) {
+	Buffer *inner = buffer_new();
+	char *s;
+	for (size_t i = 0; i < quote_node->num_children; ++i) {
+		const CTimeNode *cur = quote_node->children[i];
+		switch (cur->type) {
+			case N_SOURCE_CODE:
+				buffer_append_cstr(inner, cur->code);
+				break;
+			case N_INSERT:
+				s = resolve_insert_node(cur, compilable_code, args);
+				if (!s) return NULL;
+				buffer_append_cstr(inner, s);
+				free(s);
+				break;
+			default: exit(1);
+		}
+	}
+	buffer_null_terminate(inner);
+	s = preprocessed_str(all_seen_code, inner->data, args);
+	char *quoted = ct_format("\"%s\"", ct_quote(s));
+	free(s);
+	buffer_free(inner); // TODO: destructive move cstr out method
+	return quoted;
+}
+
+static char *resolve_comptime_node(const CTimeNode *comptime, Buffer *comptime_code, CompilerArgs *args) {
+	Buffer *inner = buffer_new();
+	char *s;
+	Buffer *tmp_concat;
+	for (size_t i = 0; i < comptime->num_children; ++i) {
+		const CTimeNode *cur = comptime->children[i];
+		switch (cur->type) {
+			case N_SOURCE_CODE:
+				buffer_append_cstr(inner, cur->code);
+				break;
+			case N_INSERT:
+				s = resolve_insert_node(cur, comptime_code, args);
+				if (!s) return NULL;
+				buffer_append_cstr(inner, s);
+				free(s);
+				break;
+			case N_QUOTE:
+				// macros do not need to be in a previous #{ }# block
+				// but insertions still do
+				tmp_concat = buffer_new();
+				buffer_append_buffer(tmp_concat, comptime_code);
+				buffer_append_buffer(tmp_concat, inner);
+				s = resolve_quote_node(cur, comptime_code, tmp_concat, args);
+				if (!s) return NULL;
+				buffer_append_cstr(inner, s);
+				buffer_free(tmp_concat);
+				free(s);
+				break;
+			default: exit(1);
+		}
+	}
+	char *result = buffer_to_cstr(inner);
+	buffer_free(inner); // TODO: destructive move cstr out method
+	return result;
 }
 
 int transpile_ct(CTime_Args *args) {
-	Lexer *lex = lexer_new(args->in_stream);
-	code_blocks code = parse_into_blocks(lex);
+	Lexer *lex = lexer_new(args->in_stream, args->tab_width);
+	CTimeNode *root = parse_into_tree(lex);
 
-	ComptimeBackend **comptime_objs = calloc(code.num_comptime_layers, sizeof(*comptime_objs));
-
-	/* compiling the comptime layers in sequence */
-	const size_t layers_to_transpile = code.num_comptime_layers < args->transpile_n_layers ? code.num_comptime_layers : args->transpile_n_layers;
-	for (size_t layer = 0; layer < layers_to_transpile; ++layer) {
-		char *transpiled_source = transpiled_comptime_layer(&code, comptime_objs, layer, layer, false);
-		if (!transpiled_source) return 1;
-		if (*transpiled_source)
-			fprintf(stderr, "Compiling layer %zu\n", layer);
-		else
-			fprintf(stderr, "Layer %zu is empty\n", layer);
-		if (!args->cc) {
-			comptime_objs[layer] = comptime_tcc_compile(transpiled_source, args->compiler_args, layer);
-		} else {
-			comptime_objs[layer] = comptime_shell_compile(transpiled_source, args->cc, args->compiler_args, layer);
-		}
-		if (!comptime_objs[layer]) {
-			/* compile_layer already prints error messages */
-			/* fprintf(stderr, "Compilation failed at layer %zu\n", layer); */
-			return 1;
-		}
-		free(transpiled_source);
+	if (args->print_ast) {
+		ctime_print_tree(root);
+		ctime_node_free(root);
+		lexer_free(lex);
+		return 0;
 	}
 
-	/*  now that comptime is done, output the new code */
-	const bool all_transpiled = code.num_comptime_layers+1 <= args->transpile_n_layers;
-	const size_t uncompiled_comptime_layers = all_transpiled ? 0 : code.num_comptime_layers - args->transpile_n_layers;
-	/* print only one layer of comptime */
-	if (args->print_comptime) {
-		if (uncompiled_comptime_layers == 0) {
-			fprintf(stderr, "arg -d was used but all comptime layers were compiled\n");
-			return 1;
+	Buffer *comptime_code = buffer_new();
+	Buffer *target_code = buffer_new();
+	char *s;
+	bool error = false;
+	terminated = false;
+	num_insertions = 0;
+	max_insertions = args->transpile_n_layers;
+	for (size_t i = 0; i < root->num_children; ++i) {
+		const CTimeNode *cur = root->children[i];
+		switch (cur->type) {
+			case N_SOURCE_CODE:
+				buffer_append_cstr(target_code, cur->code);
+				break;
+			case N_COMPTIME:
+				s = resolve_comptime_node(cur, comptime_code, args->compiler_args);
+				if (terminated)
+					break;
+				if (!s) {
+					error = true;
+					break;
+				}
+				buffer_append_cstr(comptime_code, s);
+				free(s);
+				break;
+			case N_INSERT:
+				s = resolve_insert_node(cur, comptime_code, args->compiler_args);
+				if (terminated)
+					break;
+				if (!s) {
+					error = true;
+					break;
+				}
+				buffer_append_cstr(target_code, s);
+				free(s);
+				break;
+			default: return 1;
 		}
-		char *partial_source = transpiled_comptime_layer(&code, comptime_objs, args->transpile_n_layers, args->transpile_n_layers, false);
-		if (!partial_source) return 1;
-		if (!*partial_source) {
-			fprintf(stderr, "The comptime layer is empty\n");
-		}
-		fprintf(args->out_stream, "%s", partial_source);
-		free(partial_source);
 	}
-	/* the normal path */
-	else if (uncompiled_comptime_layers == 0) {
-		fprintf(stderr, "Transpiling target C code\n");
-		int r = emit_code(code.source_code, code.num_blocks_in_source, comptime_objs, code.num_comptime_layers, args->out_stream);
-		if (r) return 1;
-		fprintf(stderr, "Transpilation complete\n");
-	} else {
-		/* printing of incomplete transpilation (arg: '-N k') */
-		/* TODO: a source map to reconstruct unconcatenated partial transpilations */
-		for (size_t i = args->transpile_n_layers; i < code.num_comptime_layers; ++i) {
-			// very unoptimal, but this repeating transpilation should only happen when debugging a partial transpilation, so it might not matter
-			char *cur_layer = transpiled_comptime_layer(&code, comptime_objs, i, args->transpile_n_layers, true);
-			if (!cur_layer) return 1;
-			fprintf(args->out_stream, "%s", cur_layer);
-			free(cur_layer);
-		}
-		int r = emit_code(code.source_code, code.num_blocks_in_source, comptime_objs, args->transpile_n_layers, args->out_stream);
-		if (r) return 1;
+	if (terminated) {
+		buffer_null_terminate(comptime_code);
+		fprintf(args->out_stream, "%s\n", comptime_code->data);
+	} else if (!error) {
+		buffer_null_terminate(target_code);
+		fprintf(args->out_stream, "%s\n", target_code->data);
+		if (args->transpile_n_layers != SIZE_MAX)
+			fprintf(stderr, "\ntranspilation completed successfully ('-N' is no-op)\n");
 	}
 
-	/* for '-N 1', 1 layer is untranspiled, but all are compiled */
-	int patch = uncompiled_comptime_layers == 0 ? 0 : 1;
-	patch = 0;
-	for (size_t layer = 0; layer < code.num_comptime_layers+patch - uncompiled_comptime_layers; ++layer) {
-		comptime_close(comptime_objs[layer]);
-	}
+	buffer_free(comptime_code);
+	buffer_free(target_code);
 
-	for (size_t i = 0; i < code.num_comptime_layers; ++i) {
-		for (size_t j = 0; j < code.num_blocks_in_comptime_layer[i]; ++j) {
-			free(code.comptime_layers[i][j].data);
-		}
-		free(code.comptime_layers[i]);
-	}
-	free(code.comptime_layers);
-	for (size_t i = 0; i < code.num_blocks_in_source; ++i) {
-		free(code.source_code[i].data);
-	}
-	free(code.source_code);
+	ctime_node_free(root);
 	lexer_free(lex);
 	return 0;
 }

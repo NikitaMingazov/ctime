@@ -36,10 +36,17 @@ char buffer_pop_end(Buffer *buf) {
 	return c;
 }
 
+void buffer_null_terminate(Buffer *buf) {
+	if (buf->len > 0) {
+		if (buf->data[buf->len-1] != '\0')
+			buffer_append_char(buf, '\0');
+	} else
+		buffer_append_char(buf, '\0');
+}
+
 char *buffer_to_cstr(const Buffer *buf) {
 	char *s = malloc(buf->len + 1);
-	if (!s)
-		return NULL;
+	if (!s) return NULL;
 	if (buf->len > 0) {
 		memcpy(s, buf->data, buf->len);
 	}
@@ -47,11 +54,23 @@ char *buffer_to_cstr(const Buffer *buf) {
 	return s;
 }
 
-int buffer_reserve(Buffer *buf, size_t needed) {
-	if (needed <= buf->cap)
+void buffer_compact(Buffer *buf) {
+	buf->data = realloc(buf->data, buf->len);
+}
+
+char *buffer_to_cstr_move(Buffer *buf) {
+	buffer_null_terminate(buf);
+	buffer_compact(buf);
+	char *data = buf->data;
+	free(buf);
+	return data;
+}
+
+int buffer_reserve(Buffer *buf, size_t new_capacity) {
+	if (new_capacity <= buf->cap)
 		return 0;
 	size_t new_cap = buf->cap;
-	while (new_cap < needed) {
+	while (new_cap < new_capacity) {
 		new_cap *= 2;
 	}
 	char *new_data = realloc(buf->data, new_cap);
@@ -100,3 +119,13 @@ int buffer_prepend_cstr(Buffer *buf, const char *s) {
 	buf->len += slen;
 	return 0;
 }
+
+int buffer_append_buffer(Buffer *buf, const Buffer *other) {
+	if (!buf || !other) return -1;
+	if (buffer_reserve(buf, buf->len + other->len) != 0)
+		return -1;
+	memcpy(&buf->data[buf->len], other->data, other->len);
+	buf->len += other->len;
+	return 0;
+}
+

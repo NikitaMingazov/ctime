@@ -4,29 +4,31 @@
 #include "lexer.h"
 #include <stddef.h>
 
-typedef enum block_type {
-	B_SOURCE_QUOTE,
-	B_SOURCE_CODE,
-	B_SOURCE_INSERT,
-	B_INSERTION_ORIGIN_HOOK,
-} block_type;
+typedef enum node_type {
+	N_ROOT,
+	N_COMPTIME,
+	N_INSERT,
+	N_QUOTE,
+	N_SOURCE_CODE,
+} node_type;
 
-typedef struct source_block {
-	// for source this isn't read
-	// 0.. are comptime, which are compiled in ascending order
-	size_t compilation_layer; // TODO: make this a u16
-	block_type type;
-	char *data;
-} source_block;
+static const char *NODE_TYPE_STR[] = {
+	"root", "comptime", "insertion", "quote", "source_code",
+};
 
-typedef struct code_blocks {
-	size_t num_comptime_layers;
-	source_block **comptime_layers;
-	size_t *num_blocks_in_comptime_layer;
-	source_block *source_code;
-	size_t num_blocks_in_source;
-} code_blocks;
+typedef struct ctime_node {
+	enum node_type type;
+	char *code;
+	unsigned row;
+	unsigned col;
+	struct ctime_node* *children;
+	size_t num_children;
+} CTimeNode;
 
-code_blocks parse_into_blocks(Lexer *lex);
+CTimeNode *parse_into_tree(Lexer *lex);
+
+void ctime_node_free(CTimeNode *n);
+void ctime_print_tree(CTimeNode *n);
 
 #endif // PARSER_H
+

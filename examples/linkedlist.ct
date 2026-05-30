@@ -6,6 +6,8 @@
 // I know about C++ but this context is pure C
 #include <ctime.h>
 // header
+// the type definition
+ctt_str ll_template(const char *T);
 // type symbol
 ctt_str ll(const char *T);
 // required trait symbols
@@ -25,14 +27,12 @@ ctt_str ll_sum(const char *T);
 // (ll<T>, T) -> ()
 ctt_str ll_push(const char *T);
 }#
-#{1
-#include <ctime.h>
-ctt_str ll_template(const char *T);
-1}#
 #{
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 // implementation
-const char *ll_template_quote =
-'{
+const char *ll_template_quote = '{
 #include <stdlib.h>
 typedef struct node_%T {
 	struct node_%T *next;
@@ -75,10 +75,6 @@ ctt_str ll_template_fn() {
 	return ct_substr_replace(ct_substr_replace(ll_template_quote, "%LL", "_z3_ll"), "%T", "%s");
 }
 
-#include <string.h>
-#include <stdlib.h>
-
-
 // T,T,T...T,T
 char *n_Ts(const int n) {
 	// char *s = malloc(1); // TODO: check what assembly looks like for this
@@ -94,16 +90,15 @@ char *n_Ts(const int n) {
 }
 
 }#
-#{1
+#{
 ctt_str ll_template(const char *T) {
 	return ct_format(
 		$( ct_format("\"%s\"", ct_quote(ll_template_fn())) )$,
 		$( n_Ts(ct_substr_count(ll_template_fn(), "%s")) )$
 	);
 }
-1}#
+}#
 #{
-#include <stdio.h>
 #define TYPE "_z3_ll"
 // type name
 ctt_str ll(const char *T) {
@@ -155,7 +150,7 @@ ctt_str ll_push(const char *T) {
 #include <stdio.h>
 
 $( ll_derive("int") )$
-$(1 ll_template("int") 1)$
+$( ll_template("int") )$
 
 float $( ll_zero_trait("float") )$ ()
 	{ return 10.0; } // trait misuse!
@@ -163,7 +158,7 @@ float $( ll_add_trait("float") )$ (float x, const float y)
 	{ return x + y; }
 char* $( ll_format_trait("float") )$ (float x)
 	{ return ct_format("%f", x); }
-$(1 ll_template("float") 1)$
+$( ll_template("float") )$
 
 #include <string.h>
 typedef struct cstr {
@@ -176,10 +171,14 @@ cstr $( ll_zero_trait("cstr") )$ ()
 		return (cstr) { .s = s };
 	}
 cstr $( ll_add_trait("cstr") )$ (cstr s1, const cstr s2)
-	{ strcat(s1.s, s2.s); return s1; }
+	{
+		realloc(s1.s, strlen(s1.s)+strlen(s2.s)+1);
+		strcat(s1.s, s2.s);
+		return s1;
+	}
 char* $( ll_format_trait("cstr") )$ (cstr s)
 	{ return s.s; }
-$(1 ll_template("cstr") 1)$
+$( ll_template("cstr") )$
 
 int main() {
 	$( ll("int") )$ intlist = $( ll_new("int") )$;

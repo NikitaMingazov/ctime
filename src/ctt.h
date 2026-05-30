@@ -9,10 +9,10 @@
 typedef struct ctime_args {
 	FILE *in_stream;
 	FILE *out_stream;
-	const char *cc;
 	struct compiler_args *compiler_args;
 	size_t transpile_n_layers;
-	bool print_comptime;
+	unsigned tab_width;
+	bool print_ast;
 } CTime_Args;
 
 CTime_Args *ctime_default_args();
@@ -22,3 +22,4 @@ CTime_Args *ctime_default_args();
 int transpile_ct(CTime_Args *args);
 
 #endif
+

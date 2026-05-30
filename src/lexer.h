@@ -6,13 +6,14 @@
 #ifndef LEXER_H
 #define LEXER_H
 
+#include <stdbool.h>
 #include <stdio.h>
 
 // tokens: <STRING>, #{, }#, $(, )$, <EOF>
 typedef enum {
 	TOKEN_NONE, // option<token>
 	TOKEN_STRING,
-	TOKEN_QUOTE_START,
+	TOKEN_QUOTE_START, // TODO: make quotes run after preprocessor
 	TOKEN_QUOTE_END,
 	TOKEN_CTIMEDEF_START,
 	TOKEN_CTIMEDEF_END,
@@ -36,13 +37,15 @@ static char *TOKENTYPE_TO_STR[] = {
 typedef struct {
 	TokenType type;
 	// not read for target source tokens
-	int scope;
+	bool is_comptime;
 	char *string_data;
+	unsigned row;
+	unsigned col;
 } Token;
 
 typedef struct Lexer Lexer;
 
-Lexer *lexer_new(FILE *in_stream);
+Lexer *lexer_new(FILE *in_stream, unsigned hard_tab_width);
 void lexer_free(Lexer *lex);
 Token lexer_next(Lexer *lex);
 

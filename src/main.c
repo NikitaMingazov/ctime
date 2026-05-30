@@ -21,12 +21,10 @@
 static const char *msg =
 " usage: %s <in_file> [OPTIONS]\n"
 " options:\n"
-"   -o <out_file>   print transpilation to file.\n"
-"                     (if absent, <_.ct> -> <_.c> is the default)\n"
-"   -N <N>          limit how many comptime layers to compile\n"
-"                     (those that remain are decremented in output)\n"
-"   -d              print only the code about to be compiled\n"
-"                     (requires -N)\n"
+"   -o <out_file>   print transpilation to file\n"
+"                     (default: <in.ct> -> <in.c>, otherwise stdout)\n"
+"   -N <N>          limit how many comptime insertions to perform\n"
+"                     (the one about to be computed is emitted)\n"
 "   -cc <cc>        use <cc> as the compiler backend instead of libtcc\n"
 "   -a <arg>        pass an arbitrary argument into cc\n"
 "   -I <dir>        also search <dir> for .h files\n"
@@ -34,6 +32,8 @@ static const char *msg =
 "   -l<name>        include lib<name>.so in linking\n"
 "   -D <def>        pass #define <def> to the comptime preprocessor\n"
 "                     ('-D primus=2' corresponds to #define primus 2)\n"
+"   -A              print ctime AST to stdout and cancel transpilation\n"
+"   -w <N>          change hard tab width for error reports (default:4)\n"
 "   -h              show this message\n"
 ;
 
@@ -144,6 +144,13 @@ int main(int argc, char **argv) {
 						INVALID
 					}
 					break;
+				case 'A':
+					if (!argv[i][2]) {
+						args->print_ast = true;
+					} else {
+						INVALID
+					}
+					break;
 				case 'o':
 					if (!argv[i][2]) {
 						if (args->out_stream) {
@@ -175,7 +182,7 @@ int main(int argc, char **argv) {
 						if (!argv[++i]) {
 							PAR_ERR("missing -cc parameter")
 						}
-						args->cc = argv[i];
+						args->compiler_args->cc = argv[i];
 					}
 					break;
 				#define DO(ARG) append_import(args, ARG, &num_includes)
@@ -188,20 +195,17 @@ int main(int argc, char **argv) {
 				CASE_CHAR_WITH_PARAMETER('D', "D")
 				#define DO(ARG) append_cc_arg(args, ARG, &num_cc_args)
 				CASE_CHAR_WITH_PARAMETER('a', "a")
+				// duplicate of these should be error?
 				#define DO(ARG) args->transpile_n_layers = atoi(ARG)
-				CASE_CHAR_WITH_PARAMETER('N', "N") // duplicate Ns should be an error?
-				case 'd':
-					if (!argv[i][2]) {
-						args->print_comptime = true;
-					} else {
-						INVALID
-					}
-					break;
-				case '-': // --arg support would be here if I cared
+				CASE_CHAR_WITH_PARAMETER('N', "N")
+				#define DO(ARG) args->tab_width = atoi(ARG)
+				CASE_CHAR_WITH_PARAMETER('w', "w")
+				case '-':
 					if (!argv[i][2]) {
 						optsdone = true;
 						continue;
 					} else {
+						// --arg support would be here if I cared
 						INVALID
 					}
 					break;
@@ -213,11 +217,8 @@ int main(int argc, char **argv) {
 	if (!args->in_stream) {
 		PAR_ERR("missing source file")
 	}
-	if (args->print_comptime && args->transpile_n_layers == SIZE_MAX) {
-		PAR_ERR("-d requires -N to be set")
-	}
 	// set .ct to c and .ht to h as the default, otherwise stdout
-	if (!args->out_stream) {
+	if (!args->out_stream && !args->print_ast) {
 		if (source_path) {
 			int len = strlen(source_path);
 			if (len >= 3 && memcmp(source_path+len-3, ".ct", 3) == 0) {
