@@ -45,7 +45,7 @@ typedef struct {
 
 typedef struct Lexer Lexer;
 
-Lexer *lexer_new(FILE *in_stream, unsigned hard_tab_width);
+Lexer *lexer_new(FILE *in_stream, unsigned hard_tab_width, bool debug);
 void lexer_free(Lexer *lex);
 Token lexer_next(Lexer *lex);
 

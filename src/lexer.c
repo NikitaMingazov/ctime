@@ -1,14 +1,21 @@
 #include "lexer.h"
 #include "buffer.h"
 #include "ctime.h"
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 
-// int k = 0; // for debugging
-Token token_new(TokenType type, char *data, unsigned row, unsigned col) {
-	// fprintf(stderr, "%d: %s\n", k++, token_to_str((Token) { .type = type, .string_data = data, .row = row, .col = col }));
+char *token_to_str(Token tok) {
+	return ct_format("%s (%d:%d)", TOKENTYPE_TO_STR[tok.type], tok.row, tok.col);
+	// return ct_format("%s (%d:%d): [\n%s\n]", TOKENTYPE_TO_STR[tok.type], tok.row, tok.col, tok.string_data);
+}
+
+int k = 0; // for debugging
+Token token_new(TokenType type, char *data, unsigned row, unsigned col, bool debug) {
+	if (debug && type != TOKEN_NONE)
+		fprintf(stderr, "%d: %s\n", k++, token_to_str((Token) { .type = type, .string_data = data, .row = row, .col = col }));
 	return (Token) { .type = type, .string_data = data, .row = row, .col = col };
 }
 
@@ -16,10 +23,6 @@ void token_free(Token tok) {
 	if (tok.type == TOKEN_STRING) {
 		free(tok.string_data);
 	}
-}
-
-char *token_to_str(Token tok) {
-	return ct_format("%s (%d:%d): [\n%s\n]", TOKENTYPE_TO_STR[tok.type], tok.row, tok.col, tok.string_data);
 }
 
 struct Lexer {
@@ -31,9 +34,10 @@ struct Lexer {
 	unsigned cur_row;
 	unsigned cur_col;
 	unsigned hard_tab_width;
+	bool debug_tokens;
 };
 
-Lexer *lexer_new(FILE *in_stream, unsigned hard_tab_width) {
+Lexer *lexer_new(FILE *in_stream, unsigned hard_tab_width, bool debug) {
 	Lexer *lex = malloc(sizeof(*lex));
 	if (!lex) {
 		fprintf(stderr, "out of memory\n");
@@ -41,13 +45,14 @@ Lexer *lexer_new(FILE *in_stream, unsigned hard_tab_width) {
 	}
 	*lex = (Lexer) {
 		.in_stream = in_stream,
-		.next = token_new(TOKEN_NONE, NULL, 0, 0),
+		.next = token_new(TOKEN_NONE, NULL, 0, 0, debug),
 		.buffer = buffer_new(),
 		.prev_col = 1,
 		.prev_row = 1,
 		.cur_row = 1,
 		.cur_col = 1,
 		.hard_tab_width = hard_tab_width,
+		.debug_tokens = debug,
 	};
 	return lex;
 }
@@ -94,7 +99,7 @@ void lexer_free(Lexer *lex) {
 			ungetc(c, lex->in_stream); \
 	} \
 	if (lex->buffer->len == 0) { /* no string before */ \
-		new_token = token_new(TYPE, NULL, lex->cur_row, lex->cur_col-2); \
+		new_token = token_new(TYPE, NULL, lex->cur_row, lex->cur_col-2, lex->debug_tokens); \
 		CONSUME_NEWLINE \
 		lex->prev_row = lex->cur_row; \
 		lex->prev_col = lex->cur_col; \
@@ -103,19 +108,20 @@ void lexer_free(Lexer *lex) {
 	s = buffer_to_cstr(lex->buffer); \
 	buffer_clear(lex->buffer); \
 	/* a string is before, return it and queue this token */ \
-	lex->next = token_new(TYPE, NULL, lex->cur_row, lex->cur_col-2); \
-	CONSUME_NEWLINE \
 	prev_row = lex->prev_row; \
 	prev_col = lex->prev_col; \
+	new_token = token_new(TOKEN_STRING, s, prev_row, prev_col, lex->debug_tokens); \
+	lex->next = token_new(TYPE, NULL, lex->cur_row, lex->cur_col-2, lex->debug_tokens); \
+	CONSUME_NEWLINE \
 	lex->prev_row = lex->cur_row; \
 	lex->prev_col = lex->cur_col; \
-	return token_new(TOKEN_STRING, s, prev_row, prev_col);
+	return new_token;
 
 Token lexer_next(Lexer *lex) {
 	/* lexer holds up to 1 token queued */
 	if (lex->next.type != TOKEN_NONE) {
 		Token t = lex->next;
-		lex->next = token_new(TOKEN_NONE, NULL, 0, 0);
+		lex->next = token_new(TOKEN_NONE, NULL, 0, 0, lex->debug_tokens);
 		return t;
 	}
 	/* State machine */
@@ -268,8 +274,8 @@ Token lexer_next(Lexer *lex) {
 	if (lex->buffer->len > 0) {
 		char *final_source = buffer_to_cstr(lex->buffer);
 		buffer_clear(lex->buffer);
-		return token_new(TOKEN_STRING, final_source, lex->prev_row, lex->prev_col);
+		return token_new(TOKEN_STRING, final_source, lex->prev_row, lex->prev_col, lex->debug_tokens);
 	}
-	return token_new(TOKEN_EOF, NULL, 0, 0);
+	return token_new(TOKEN_EOF, NULL, 0, 0, lex->debug_tokens);
 }
 

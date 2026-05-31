@@ -33,6 +33,7 @@ CTime_Args *ctime_default_args() {
 		.compiler_args = malloc(sizeof(struct compiler_args)),
 		.tab_width = 4,
 		.print_ast = false,
+		.print_tokens = false,
 	};
 	args->compiler_args->defines = malloc(sizeof(char**));
 	*args->compiler_args->defines = NULL;
@@ -138,6 +139,7 @@ static char *evaluate_expr(Buffer *source_code, const char *expr, CompilerArgs *
 unsigned num_insertions;
 size_t max_insertions;
 bool terminated;
+// TODO: make the parser an iterator to print raw source post termination
 
 static char *resolve_insert_node(const CTimeNode *insert, Buffer *comptime_code, CompilerArgs *args) {
 	Buffer *inner = buffer_new();
@@ -262,7 +264,7 @@ static char *resolve_comptime_node(const CTimeNode *comptime, Buffer *comptime_c
 }
 
 int transpile_ct(CTime_Args *args) {
-	Lexer *lex = lexer_new(args->in_stream, args->tab_width);
+	Lexer *lex = lexer_new(args->in_stream, args->tab_width, args->print_tokens);
 	CTimeNode *root = parse_into_tree(lex);
 
 	if (args->print_ast) {

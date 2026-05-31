@@ -53,7 +53,9 @@ static void insert_production(Lexer *lex, CTimeNode *insert) {
 				break;
 			case TOKEN_INSERTION_END:
 				return;
-			default: abort();
+			default:
+				fprintf(stderr, "Syntax error (%d:%d)\n", tok.row, tok.col);
+				exit(1);
 		}
 	}
 }
@@ -73,7 +75,9 @@ static void quote_production(Lexer *lex, CTimeNode *quote) {
 				break;
 			case TOKEN_QUOTE_END:
 				return;
-			default: abort();
+			default:
+				fprintf(stderr, "Syntax error (%d:%d)\n", tok.row, tok.col);
+				exit(1);
 		}
 	}
 }
@@ -98,7 +102,9 @@ static void comptime_production(Lexer *lex, CTimeNode *comptime) {
 				break;
 			case TOKEN_CTIMEDEF_END:
 				return;
-			default: abort();
+			default:
+				fprintf(stderr, "Syntax error (%d:%d)\n", tok.row, tok.col);
+				exit(1);
 		}
 	}
 }
@@ -124,7 +130,9 @@ CTimeNode *parse_into_tree(Lexer *lex) {
 				append_child(root, insert_block);
 				insert_production(lex, insert_block);
 				break;
-			default: abort();
+			default:
+				fprintf(stderr, "Syntax error (%d:%d)\n", tok.row, tok.col);
+				exit(1);
 		}
 	}
 	return root;

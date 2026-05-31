@@ -1,0 +1,142 @@
+#include <string.h>
+#include <strings.h>
+#{ // header
+#include <ctime.h>
+// trait symbols (for K)
+// T -> size_t
+ctt_str hash_trait(const char *T);
+// (T, T) -> bool
+ctt_str eq_trait(const char *T);
+
+// implementation template
+ctt_str hm_template(const char *K, const char *V);
+// type symbol
+ctt_str hm(const char *K, const char *V);
+// void -> HashMap<K, V>
+ctt_str hm_new(const char *K, const char *V);
+// HashMap<K, V> -> void
+ctt_str hm_free(const char *K, const char *V);
+// methods
+// K -> V   (aborts if not present)
+ctt_str hm_get(const char *K, const char *V);
+// K -> bool
+ctt_str hm_contains(const char *K, const char *V);
+// K,V -> int  (nonzero return when error)
+ctt_str hm_insert(const char *K, const char *V);
+// K -> void
+ctt_str hm_remove(const char *K, const char *V);
+// I would like this interface
+// ctt_str hm_get(const char *iden);
+// ctt_str hm_contains(const char *iden);
+// ctt_str hm_insert(const char *iden);
+// ctt_str hm_remove(const char *iden);
+}#
+#{ // implementation
+#define NUM_PROBES 7
+#define INITIAL_SIZE 16
+#include <stdbool.h>
+const char *hm_template_quote = '{
+struct HM_Node%K_%V {
+	%K key;
+	%V value;
+	bool not_null; // zero-initialised
+};
+struct HM_%K_%V {
+	size_t capacity;
+	struct HM_Node%K_%V *table;
+};
+HM_%K_%V* HM_%K_%V_new() {
+	HM_%K_%V *new = malloc(sizeof(*new));
+	new->capacity = INITIAL_SIZE;
+	new->table = calloc(INITIAL_SIZE, sizeof(HM_Node%K_%V));
+}
+void HM_%K_%V_free(HM_%K_%V *HM) {
+	free(HM->table);
+	free(HM);
+}
+size_t HM_%K_%V_index(HashMap%K_%V *HM, %K K, int attempt) {
+	return (hash_%K(K) + attempt) % HM->capacity;
+}
+struct HM_Node%K_%V *HM_%K_%V_get_node(HashMap%K_%V *HM, %K K) {
+	for (int i = 0; i < NUM_PROBES; ++i) {
+		size_t index = HashMap%K_%V_index(HM, K, i);
+		if (!HM->table[index].not_null) {
+			if (eq_%K(HM->table[index].key, K)) {
+				return &HM->table[index];
+			}
+		}
+	}
+	return NULL;
+}
+%V HM_%K_%V_get(HashMap%K_%V *HM, %K K) {
+	struct HM_Node%K_%V *adr = HM_%K_%V_get_node(HM, K);
+	if (!adr) exit(1);
+	return adr->value;
+}
+bool HM_%K_%V_contains(HashMap%K_%V *HM, %K K) {
+	struct HM_Node%K_%V *adr = HM_%K_%V_get_node(HM, K);
+	if (adr)
+		return true;
+	else
+		return false;
+}
+void HM_%K_%V_remove(HashMap%K_%V *HM, %K K) {
+	struct HM_Node%K_%V *adr = HM_%K_%V_get_node(HM, K);
+	if (adr)
+		adr->not_null = false;
+}
+void HM_%K_%V_upscale(HM_%K_%V *HM) {
+	size_t old_capacity = HM->capacity;
+	HM->capacity *= 2;
+	HM->table = realloc(HM->table, HM->capacity*sizeof(HM_Node%K_%V));
+	memset(&HM->table[old_capacity], 0, sizeof(HM_Node%K_%V)*(HM->capacity-old_capacity));
+	for (size_t i = 0; i < old_capacity; ++i) {
+		// move existing table entries
+		HM_Node%K_%V *entry = &HM->table[i];
+		if (!entry->not_null) {
+			entry->not_null = true;
+			hm_insert(HM, entry->key, entry->V);
+		}
+	}
+}
+void HM_%K_%V_insert(HashMap%K_%V *HM, %K K, %V V) {
+	for (int i = 0; i < NUM_PROBES; ++i) {
+		size_t index = HM_%K_%V_index(HM, K, i);
+		if (!HM->table[index].not_null) {
+			HM->table[index].key = K;
+			HM->table[index].value = V;
+			HM->table[index].not_null = true;
+			return;
+		}
+	} // retry after making the table larger
+	HM_%K_%V_upscale(HM);
+	HM_%K_%V_insert(HM, K, V);
+}
+}' ;
+}#
+#{
+ctt_str hm_template(const char *K, const char *V) {
+	return ct_substr_replace(ct_substr_replace(hm_template_str, "%K", K), "%V", V);
+}
+ctt_str hm(const char *K, const char *V) {
+	return ct_format("HM_%s_%s, K, V");
+}
+ctt_str hm_new(const char *K, const char *V) {
+	return ct_format("%s_new", hm(K, V));
+}
+ctt_str hm_free(const char *K, const char *V) {
+	return ct_format("%s_free", hm(K, V));
+}
+ctt_str hm_get(const char *K, const char *V) {
+	return ct_format("%s_get", hm(K, V));
+}
+ctt_str hm_contains(const char *K, const char *V) {
+	return ct_format("%s_contains", hm(K, V));
+}
+ctt_str hm_insert(const char *K, const char *V) {
+	return ct_format("%s_insert", hm(K, V));
+}
+ctt_str hm_remove(const char *K, const char *V) {
+	return ct_format("%s_remove", hm(K, V));
+}
+}#

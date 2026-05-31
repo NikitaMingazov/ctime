@@ -1,0 +1,33 @@
+#{
+#include <ctime.h>
+#include "hashmap.ht"
+}#
+#{
+$( hash_trait("int") )$  (int a)
+	{ return a; }
+// (T, T) -> bool
+$( eq_trait("int") )$ (int a, int b)
+	{ return a == b; }
+$( hm_template("int", "int") )$
+}#
+#{
+#include <stdio.h>
+ctt_str main() {
+	$( hm("int", "int") )$ int_to_int = $( hm_new("int", "int") )$();
+}
+}#
+// $( main() )$
+$( hash_trait("int") )$ (int a)
+	{ return a; }
+// (T, T) -> bool
+$( eq_trait("int") )$ (int a, int b)
+	{ return a == b; }
+$( hm_template("int", "int") )$
+#include <stdio.h>
+
+int main() {
+	$( hm("int", "int") $) int_to_int = $( hm_new("int", "int") )$ ();
+	$( hm_insert("int") $) (int_to_int, 4, 5);
+	printf("%d\n", $( hm_get("int") $) (int_to_int, 4));
+	return 0;
+}

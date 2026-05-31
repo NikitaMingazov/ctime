@@ -13,6 +13,7 @@ typedef struct ctime_args {
 	size_t transpile_n_layers;
 	unsigned tab_width;
 	bool print_ast;
+	bool print_tokens;
 } CTime_Args;
 
 CTime_Args *ctime_default_args();

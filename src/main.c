@@ -33,6 +33,7 @@ static const char *msg =
 "   -D <def>        pass #define <def> to the comptime preprocessor\n"
 "                     ('-D primus=2' corresponds to #define primus 2)\n"
 "   -A              print ctime AST to stdout and cancel transpilation\n"
+"   -T              print ctime tokens to stderr\n"
 "   -w <N>          change hard tab width for error reports (default:4)\n"
 "   -h              show this message\n"
 ;
@@ -147,6 +148,13 @@ int main(int argc, char **argv) {
 				case 'A':
 					if (!argv[i][2]) {
 						args->print_ast = true;
+					} else {
+						INVALID
+					}
+					break;
+				case 'T':
+					if (!argv[i][2]) {
+						args->print_tokens = true;
 					} else {
 						INVALID
 					}
