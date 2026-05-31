@@ -106,6 +106,15 @@ char *replace_extension(char *path, const char *extension) {
 		} \
 		break;
 
+#define SINGLE_CHAR_FLAG(CHAR) \
+	case CHAR: \
+		if (!argv[i][2]) { \
+			VOID_DO \
+		} else { \
+			INVALID \
+		} \
+		break;
+
 int main(int argc, char **argv) {
 	int status = 0;
 	size_t num_includes = 0;
@@ -137,28 +146,12 @@ int main(int argc, char **argv) {
 				continue;
 			}
 			switch (argv[i][1]) {
-				case 'h':
-					if (!argv[i][2]) {
-						printf(msg, argv[0]);
-						return 0;
-					} else {
-						INVALID
-					}
-					break;
-				case 'A':
-					if (!argv[i][2]) {
-						args->print_ast = true;
-					} else {
-						INVALID
-					}
-					break;
-				case 'T':
-					if (!argv[i][2]) {
-						args->print_tokens = true;
-					} else {
-						INVALID
-					}
-					break;
+				#define VOID_DO printf(msg, argv[0]); return 0;
+				SINGLE_CHAR_FLAG('h')
+				#define VOID_DO args->print_ast = true;
+				SINGLE_CHAR_FLAG('A')
+				#define VOID_DO args->print_tokens = true;
+				SINGLE_CHAR_FLAG('T')
 				case 'o':
 					if (!argv[i][2]) {
 						if (args->out_stream) {
