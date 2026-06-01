@@ -1,3 +1,9 @@
+/*
+   0: transpile hashmap.ct with ctt
+   1: include as hashmap.c in comptime code
+   2: transpile this with ctt
+   3: compile with real compiler
+*/
 #include <stdio.h>
 #include <assert.h>
 #{
