@@ -1,0 +1,244 @@
+#{
+/* a hashmap with integrated testing
+  define TEST to only run a test
+  define ECHO to print the test run to stdout
+  define NOTEST to only export code without testing
+  default is silent test before code export
+*/
+// API
+#include <ctime.h>
+// trait symbols (for K)
+// T -> size_t
+ctt_str hash_trait(const char *T);
+// (T, T) -> bool
+ctt_str eq_trait(const char *T);
+
+// implementation template
+ctt_str hm_template(const char *K, const char *V);
+// type symbol
+ctt_str hm(const char *K, const char *V);
+// void -> HashMap<K, V>
+ctt_str hm_new(const char *K, const char *V);
+// HashMap<K, V> -> void
+ctt_str hm_free(const char *K, const char *V);
+// methods
+// K -> V   (aborts if not present)
+ctt_str hm_get(const char *K, const char *V);
+// K -> bool
+ctt_str hm_contains(const char *K, const char *V);
+// K,V -> int  (nonzero return when error)
+ctt_str hm_insert(const char *K, const char *V);
+// K -> void
+ctt_str hm_remove(const char *K, const char *V);
+// todo: this API for generics
+// 0: use hm_template for the type
+// 1: use hm_define inside of #{ }# to create an instance of the type
+// 2: call the generic methods to get the method symbol
+// 3: implement errors for define instance of undefined type
+// 4: implement warnings for unused types
+// define populates a name -> symbols mapping, and creates methods if they don't exist
+// ctt_str hm_define(const char *into_name, const char *T);
+// ctt_str get(const char *name);
+// ctt_str contains(const char *name);
+// ctt_str insert(const char *name);
+// ctt_str remove(const char *name);
+}#
+#{ // implementation
+// #define NUM_PROBES 10 // is bounded probing good, or bad?
+#define INITIAL_SIZE 16
+// in the quote, this would get preprocessed
+const char *hm_includes = "#include <ctime.h>\n#include <stdlib.h>\n#include <stdbool.h>\n#include <string.h>\n";
+const char *hm_template_quote = '{
+static const size_t c1 = 1; // (i^2 + i) / 2
+static const size_t c2 = 1;
+typedef struct HM_Node%K_%V {
+	%K key;
+	%V value;
+	// TODO: null(K) trait?
+	bool not_null; // zero-initialised
+} HM_Node%V_%V;
+typedef struct HM_%K_%V {
+	size_t capacity;
+	size_t num_elements;
+	struct HM_Node%K_%V *table;
+} HM_%K_%V;
+static HM_%K_%V* HM_%K_%V_new(void) {
+	HM_%K_%V *new = malloc(sizeof(*new));
+	new->capacity = INITIAL_SIZE;
+	new->num_elements = 0;
+	new->table = calloc(INITIAL_SIZE, sizeof(HM_Node%K_%V));
+	return new;
+}
+static void HM_%K_%V_free(HM_%K_%V *HM) {
+	free(HM->table);
+	free(HM);
+}
+// quadratic probing
+static size_t HM_%K_%V_index(HM_%K_%V *HM, %K K, int attempt) {
+	size_t i = attempt;
+	return ( hash_%K(K) + (c1*i + c2*i^2)/2 ) % HM->capacity;
+}
+static struct HM_Node%K_%V *HM_%K_%V_get_node(HM_%K_%V *HM, %K K) {
+	for (size_t i = 0; ; ++i) {
+		size_t index = HM_%K_%V_index(HM, K, i);
+		if (HM->table[index].not_null) {
+			if (eq_%K(HM->table[index].key, K)) {
+				return &HM->table[index];
+			}
+		} else {
+			return NULL;
+		}
+	}
+}
+static %V HM_%K_%V_get(HM_%K_%V *HM, %K K) {
+	struct HM_Node%K_%V *adr = HM_%K_%V_get_node(HM, K);
+	if (!adr) exit(1);
+	return adr->value;
+}
+static bool HM_%K_%V_contains(HM_%K_%V *HM, %K K) {
+	struct HM_Node%K_%V *adr = HM_%K_%V_get_node(HM, K);
+	if (adr)
+		return true;
+	else
+		return false;
+}
+static void HM_%K_%V_remove(HM_%K_%V *HM, %K K) {
+	return;
+	struct HM_Node%K_%V *adr = HM_%K_%V_get_node(HM, K);
+	if (adr) {
+		adr->not_null = false;
+		--HM->num_elements;
+	}
+}
+static void HM_%K_%V_insert(HM_%K_%V *HM, %K K, %V V);
+static void HM_%K_%V_upscale(HM_%K_%V *HM) {
+	size_t old_capacity = HM->capacity;
+	HM->capacity *= 2;
+	HM->table = realloc(HM->table, HM->capacity*sizeof(HM_Node%K_%V));
+	memset(&HM->table[old_capacity], 0, sizeof(HM_Node%K_%V)*(HM->capacity-old_capacity));
+	for (size_t i = 0; i < old_capacity; ++i) {
+		// move existing table entries
+		HM_Node%K_%V *entry = &HM->table[i];
+		if (!entry->not_null) {
+			entry->not_null = true;
+			HM_%K_%V_insert(HM, entry->key, entry->value);
+		}
+	}
+}
+static void HM_%K_%V_insert(HM_%K_%V *HM, %K K, %V V) {
+	// resize if 0.8 of capacity is used
+	if (HM->num_elements * 5 >= HM->capacity * 4 )
+		HM_%K_%V_upscale(HM);
+	for (size_t i = 0; ; ++i) {
+		size_t index = HM_%K_%V_index(HM, K, i);
+		if (!HM->table[index].not_null) {
+			++HM->num_elements;
+			HM->table[index].key = K;
+			HM->table[index].value = V;
+			HM->table[index].not_null = true;
+			return;
+		}
+	}
+}
+}' ; // const char *hm_template_quote =
+}#
+#{
+char *api = '{
+ctt_str hash_trait(const char *T) {
+	ctt_return(ct_format("hash_%s", T));
+}
+ctt_str eq_trait(const char *T) {
+	ctt_return(ct_format("eq_%s", T));
+}
+ctt_str hm_template(const char *K, const char *V) {
+	char *guard = ct_format("GUARD_HM_%K_%V_H", K, V);
+	return ct_format("%s%s", hm_includes, ct_substr_replace(ct_substr_replace(ct_format("#ifndef %s\n#define %s\n%s\n#endif\n", guard, guard, hm_template_quote), "%K", K), "%V", V));
+}
+ctt_str hm(const char *K, const char *V) {
+	return ct_format("HM_%s_%s", K, V);
+}
+ctt_str hm_new(const char *K, const char *V) {
+	return ct_format("%s_new", hm(K, V));
+}
+ctt_str hm_free(const char *K, const char *V) {
+	return ct_format("%s_free", hm(K, V));
+}
+ctt_str hm_get(const char *K, const char *V) {
+	return ct_format("%s_get", hm(K, V));
+}
+ctt_str hm_contains(const char *K, const char *V) {
+	return ct_format("%s_contains", hm(K, V));
+}
+ctt_str hm_insert(const char *K, const char *V) {
+	return ct_format("%s_insert", hm(K, V));
+}
+ctt_str hm_remove(const char *K, const char *V) {
+	return ct_format("%s_remove", hm(K, V));
+}
+}' ; // const char *api =
+}#
+#{
+// #ifndef NOTEST
+$( api )$ // this corresponds to #{ #include hashmap.c }#
+// #endif
+}#
+#{
+// #ifndef NOTEST
+int $( hash_trait("int") )$ (int a)
+	{ return a; }
+int $( eq_trait("int") )$ (int a, int b)
+	{ return a == b; }
+$( hm_template("int", "int") )$
+// #endif
+}#
+#{
+#ifndef NOTEST // run test
+#ifdef ECHO // echo on
+#include <stdio.h>
+#else // echo off
+#define puts(X)
+#define printf(...)
+#endif // ifndef ECHO
+
+ctt_str test_hashmap() {
+	int val;
+	$( hm("int", "int") )$ *int_to_int = $( hm_new("int", "int") )$ ();
+	puts("inserting (4,5)");
+	$( hm_insert("int", "int") )$ (int_to_int, 4, 5);
+	puts("inserting (7,8)");
+	$( hm_insert("int", "int") )$ (int_to_int, 7, 8);
+	val = $( hm_get("int", "int") )$ (int_to_int, 4);
+	printf("value of 4: %d\n", val);
+	ctt_assert(val == 5, "val == 5");
+	val = $( hm_get("int", "int") )$ (int_to_int, 7);
+	printf("value of 7: %d\n", val);
+	ctt_assert(val == 8, "val == 8");
+	val = $( hm_contains("int", "int") )$ (int_to_int, 8);
+	printf("contains 8: %b\n", val);
+	ctt_assert(val == 0, "val == 0");
+	val = $( hm_contains("int", "int") )$ (int_to_int, 7);
+	printf("contains 7: %b\n", val);
+	ctt_assert(val == 1, "val == 1");
+	puts("removing 7");
+	$( hm_remove("int", "int") )$ (int_to_int, 7);
+	val = $( hm_contains("int", "int") )$ (int_to_int, 7);
+	printf("contains 7: %b\n", val);
+	// ctt_return("tests passed");
+	ctt_return("");
+}
+#else
+ctt_str test_hashmap() { ctt_return(""); }
+#endif // ifndef NOTEST
+
+#ifndef TEST
+ctt_str export_c() {
+	ctt_return(ct_format("#include <ctime.h>\n"
+				         "const char *hm_includes = \"%s\";\n"
+						 "const char *hm_template_quote = \"%s\";\n"
+						 "%s", ct_quote(hm_includes), ct_quote(hm_template_quote), api));
+}
+#else
+ctt_str export_c() { ctt_return(""); }
+#endif // ifndef TEST
+}#
+$( test_hashmap() )$$( export_c() )$

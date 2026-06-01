@@ -1,0 +1,39 @@
+#include <stdio.h>
+#include <assert.h>
+#{
+#include "hashmap.c"
+}#
+
+int $( hash_trait("int") )$ (int a)
+	{ return a; }
+int $( eq_trait("int") )$ (int a, int b)
+	{ return a == b; }
+$( hm_template("int", "int") )$
+
+int main(){
+	int val;
+	$( hm("int", "int") )$ *int_to_int = $( hm_new("int", "int") )$ ();
+	puts("inserting (4,5)");
+	$( hm_insert("int", "int") )$ (int_to_int, 4, 5);
+	puts("inserting (7,8)");
+	$( hm_insert("int", "int") )$ (int_to_int, 7, 8);
+	val = $( hm_get("int", "int") )$ (int_to_int, 4);
+	printf("value of 4: %d\n", val);
+	assert(val == 5);
+	val = $( hm_get("int", "int") )$ (int_to_int, 7);
+	printf("value of 7: %d\n", val);
+	assert(val == 8);
+	val = $( hm_contains("int", "int") )$ (int_to_int, 8);
+	printf("contains 8: %b\n", val);
+	assert(val == 0);
+	val = $( hm_contains("int", "int") )$ (int_to_int, 7);
+	printf("contains 7: %b\n", val);
+	assert(val == 1);
+	puts("removing 7");
+	$( hm_remove("int", "int") )$ (int_to_int, 7);
+	val = $( hm_contains("int", "int") )$ (int_to_int, 7);
+	printf("contains 7: %b\n", val);
+	// ctt_return("tests passed");
+	return 0;
+}
+
