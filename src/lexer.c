@@ -8,8 +8,8 @@
 #include <stdbool.h>
 
 char *token_to_str(Token tok) {
-	return ct_format("%s (%d:%d)", TOKENTYPE_TO_STR[tok.type], tok.row, tok.col);
-	// return ct_format("%s (%d:%d): [\n%s\n]", TOKENTYPE_TO_STR[tok.type], tok.row, tok.col, tok.string_data);
+	// return ct_format("%s (%d:%d)", TOKENTYPE_TO_STR[tok.type], tok.row, tok.col);
+	return ct_format("%s (%d:%d): [\n%s\n]", TOKENTYPE_TO_STR[tok.type], tok.row, tok.col, tok.string_data);
 }
 
 int k = 0; // for debugging
@@ -85,13 +85,13 @@ void lexer_free(Lexer *lex) {
 	/* clear down to previous string */ \
 	buffer_pop_end(lex->buffer); \
 	buffer_pop_end(lex->buffer); \
-	/* remove preceding space for closing tokens */ \
-	if (TYPE == TOKEN_CTIMEDEF_END || TYPE == TOKEN_INSERTION_END || TYPE == TOKEN_QUOTE_END ) { \
+	/* remove preceding space for block closes */ \
+	if (TYPE == TOKEN_CTIMEDEF_END || TYPE == TOKEN_INSERTION_END) { \
 		if (lex->buffer->len > 0 && lex->buffer->data[lex->buffer->len-1] == ' ') \
 			buffer_pop_end(lex->buffer); \
 	} \
-	/* remove postceding space for opening tokens */ \
-	if (TYPE == TOKEN_CTIMEDEF_START || TYPE == TOKEN_INSERTION_START || TYPE == TOKEN_QUOTE_START ) { \
+	/* remove postceding space for block opens */ \
+	if (TYPE == TOKEN_CTIMEDEF_START || TYPE == TOKEN_INSERTION_START) { \
 		c = fgetc(lex->in_stream); \
 		if (c == ' ') \
 			lex->cur_col++; \
@@ -100,10 +100,16 @@ void lexer_free(Lexer *lex) {
 	} \
 	if (lex->buffer->len == 0) { /* no string before */ \
 		new_token = token_new(TYPE, NULL, lex->cur_row, lex->cur_col-2, lex->debug_tokens); \
-		CONSUME_NEWLINE \
+		if (TYPE == TOKEN_CTIMEDEF_START) \
+			CONSUME_NEWLINE \
 		lex->prev_row = lex->cur_row; \
 		lex->prev_col = lex->cur_col; \
 		return new_token; \
+	} \
+	/* remove preceding newline for comptime blocks */ \
+	if (TYPE == TOKEN_CTIMEDEF_START) { \
+		if (lex->buffer->len > 0 && lex->buffer->data[lex->buffer->len-1] == '\n') \
+			buffer_pop_end(lex->buffer); \
 	} \
 	s = buffer_to_cstr(lex->buffer); \
 	buffer_clear(lex->buffer); \
@@ -112,7 +118,9 @@ void lexer_free(Lexer *lex) {
 	prev_col = lex->prev_col; \
 	new_token = token_new(TOKEN_STRING, s, prev_row, prev_col, lex->debug_tokens); \
 	lex->next = token_new(TYPE, NULL, lex->cur_row, lex->cur_col-2, lex->debug_tokens); \
-	CONSUME_NEWLINE \
+	if (TYPE == TOKEN_CTIMEDEF_END) { \
+		CONSUME_NEWLINE \
+	} \
 	lex->prev_row = lex->cur_row; \
 	lex->prev_col = lex->cur_col; \
 	return new_token;
@@ -144,6 +152,7 @@ Token lexer_next(Lexer *lex) {
 
 	char *s;
 	int c;
+	int peek;
 	unsigned prev_row, prev_col;
 	Token new_token;
 	while ((c = fgetc(lex->in_stream)) != EOF) {
@@ -157,7 +166,7 @@ Token lexer_next(Lexer *lex) {
 			lex->cur_col++;
 	epsilon:
 		switch (state) {
-			case S_CSOURCE:
+			case S_CSOURCE: // TODO: warn on $) and #}
 				switch (c) {
 					SWITCH_TRANSITION('#', S_HASH)
 					SWITCH_TRANSITION('$', S_DOLLAR)
@@ -252,7 +261,11 @@ Token lexer_next(Lexer *lex) {
 
 			case S_CSOURCE_CHAR:
 				if (c == '{') {
-					PUSH_TOKEN(TOKEN_QUOTE_START)
+					peek = fgetc(lex->in_stream);
+					ungetc(peek, lex->in_stream);
+					if (peek != '\'') {
+						PUSH_TOKEN(TOKEN_QUOTE_START)
+					}
 				} else if (c == '\\') {
 					state = S_CSOURCE_CHAR_ESCAPE;
 				} else {
