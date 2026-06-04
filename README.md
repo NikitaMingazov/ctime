@@ -26,7 +26,7 @@ libtcc is a dependency, which is usually found in your distro's "tcc" package. I
 
 \#\{ ... \}\# is a block of statements, all such blocks are concatenated and compiled into a temporary binary in memory using tinycc or a shell compiler with the -cc arg.
 
-\(\$ ... ​\$\) is an expression block that takes a char* expression, and replaces the block in source with the it. Note that all such functions must be stateless due to being baked into the aforementioned binary. The char* expression must have been defined in a \#\{ \}\# block preceding its scope, but these blocks can be used anywhere, including inside other comptime expressions and even quotes (and of course, to insert source code into the transpiled C program).
+\(\$ ... ​\$\) is an expression block that takes a char* expression, and replaces the block in source with the it. Note that all such expressions cannot mutate state due to being evaluated by compiling the aforementioned binary. The char* expression must have been defined in a \#\{ \}\# block preceding its scope, but these blocks can be used anywhere, including inside other comptime expressions and even quotes (and of course, to insert source code into the transpiled C program).
 
 \'\{ ... \}\' is a quote block that runs the preprocessor according to the comptime state before the quote, and replaces itself with its contents as string literal that is formatted such that when printed, is identical to the former block contents. There are no syntax or recursion concerns for it to use the previous comptime block state for the preprocessor, but these cannot be used in runtime C code.
 

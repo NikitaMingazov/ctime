@@ -165,7 +165,7 @@ static char *resolve_insert_node(const CTimeNode *insert, Buffer *comptime_code,
 		return NULL;
 	if (++num_insertions > max_insertions) {
 		terminated = true;
-		buffer_append_cstr(comptime_code, "\nabout to resolve expr:\n $( ");
+		buffer_append_cstr(comptime_code, "\n// about to resolve expr:\n $( ");
 		buffer_append_cstr(comptime_code, expr);
 		buffer_append_cstr(comptime_code, " )$");
 		free(expr);
@@ -174,7 +174,7 @@ static char *resolve_insert_node(const CTimeNode *insert, Buffer *comptime_code,
 	char *insertion = evaluate_expr(comptime_code, expr, args);
 	free(expr);
 	if (!insertion) {
-		fprintf(stderr, "error in insertion %d\n", num_insertions);
+		fprintf(stderr, "comptime terminated in insertion %d starting at at %d:%d\n", num_insertions, insert->row, insert->col);
 	}
 	return insertion;
 }
@@ -220,9 +220,9 @@ static char *resolve_quote_node(const CTimeNode *quote_node, Buffer *compilable_
 		}
 	}
 	buffer_null_terminate(inner);
-	s = preprocessed_str(all_seen_code, inner->data, args);
+	// s = preprocessed_str(all_seen_code, inner->data, args);
+	s = inner->data;
 	char *quoted = ct_format("\"%s\"", ct_quote(s));
-	free(s);
 	buffer_free(inner); // TODO: destructive move cstr out method
 	return quoted;
 }
@@ -290,10 +290,10 @@ int transpile_ct(CTime_Args *args) {
 			case N_COMPTIME:
 				s = resolve_comptime_node(cur, comptime_code, args->compiler_args);
 				if (terminated)
-					break;
+					goto done;
 				if (!s) {
 					error = true;
-					break;
+					goto done;
 				}
 				buffer_append_cstr(comptime_code, s);
 				free(s);
@@ -301,17 +301,18 @@ int transpile_ct(CTime_Args *args) {
 			case N_INSERT:
 				s = resolve_insert_node(cur, comptime_code, args->compiler_args);
 				if (terminated)
-					break;
+					goto done;
 				if (!s) {
 					error = true;
-					break;
+					goto done;
 				}
 				buffer_append_cstr(target_code, s);
 				free(s);
 				break;
-			default: return 1;
+			default: abort();
 		}
 	}
+done:
 	if (terminated) {
 		buffer_null_terminate(comptime_code);
 		fprintf(args->out_stream, "%s\n", comptime_code->data);
@@ -319,7 +320,7 @@ int transpile_ct(CTime_Args *args) {
 		buffer_null_terminate(target_code);
 		fprintf(args->out_stream, "%s\n", target_code->data);
 		if (args->transpile_n_layers != SIZE_MAX)
-			fprintf(stderr, "\ntranspilation completed successfully ('-N' is no-op)\n");
+			fprintf(stderr, "\narg '-N (>=%d)' is ignored due to being complete\n", num_insertions);
 	}
 
 	buffer_free(comptime_code);

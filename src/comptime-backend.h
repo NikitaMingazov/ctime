@@ -10,6 +10,7 @@
 typedef struct compiler_args {
 	// NULL for libtcc in memory
 	const char *cc;
+	// null terminated arrays of strings
 	const char **include_dirs;
 	const char **lib_dirs;
 	const char **lib_names;

@@ -1,15 +1,15 @@
 #{ // script that prints to stderr the preprocessed #include <HEADER> for cc
+// currently broken, WIP to restore
+#include <ctime.h>
 #ifndef HEADER
 #define HEADER stddef.h
 #endif
 char *header_name = '{ HEADER }';
 }#
 #{
-// quote blocks are preprocessed before conversion to strings
-// and str insertion is before preprocessing
-char *header_str = '{
+char *header_str = ctt_preprocess('{
 	#include <$( header_name )$>
-}' ;
+}', $$) ; // $$ is a pointer to the parsed args to ctt
 #include <stdio.h>
 char *main() {
 	fprintf(stderr, header_str);

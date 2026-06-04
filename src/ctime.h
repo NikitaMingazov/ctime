@@ -5,10 +5,11 @@
 #ifndef CTIME_H
 #define CTIME_H
 
+#include <stdio.h>
 #include <stdarg.h>
 #include <stddef.h>
 
-// transpiler stuff (ctt)
+// transpiler comp-runtime (ctt)
 
 // I might make a new type to return more information to the transpiler
 // As far as I have in mind, NULL for error is sufficient
@@ -17,24 +18,28 @@
 // the type returned by insertion macros
 #define ctt_str char*
 
+// Managed memory to be freed by ctt_return (WIP)
+#define ctt_alloc(ALLOC_SIZE) \
+	malloc(ALLOC_SIZE)
+
 // Returns a string for use in macros (currently just a normal char*)
 #define ctt_return(STR) \
 	return (ctt_str)STR
-
-// If an expression is false, returns an error to the transpiler
-// and prints a given string to stderr
-#define ctt_assert(BOOL, STR) \
-	do { \
-		if (!(BOOL)) {										\
-			fprintf(stderr, "assertion failed: %s\n", STR); \
-			return (ctt_str)NULL; \
-		} \
-	} while {0}
 
 // Returns an error to transpiler and prints a given string to stderr
 #define ctt_error(STR) \
 	fprintf(stderr, "%s\n", STR); \
 	return (ctt_str)NULL; \
+
+// If an expression is false, returns an error to the transpiler
+// and prints a given string to stderr
+#define ctt_assert(BOOL, STR) \
+	do { \
+		if (!(BOOL)) { \
+			fprintf(stderr, "assertion failed: %s\n", STR); \
+			return (ctt_str)NULL; \
+		} \
+	} while (0)
 
 // useful functions (ct)
 
