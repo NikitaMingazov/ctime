@@ -14,13 +14,13 @@ libtcc is a dependency, which is usually found in your distro's "tcc" package. I
 
 ## Usage
 
-```ctt <source.ct>``` emits the transpiled source to source.c in the same directory.
+```ctt <source.ct>``` emits the transpiled source to 'source.c'.
 
 ```ctt -o <target.c> <source.ct>``` emits the transpiled source to the provided file path.
 
 ```ctt -o - <source.ct>``` emits the transpiled source to stdout.
 
-```ctt -h``` displays the full list of options
+```ctt -h``` displays the full list of options.
 
 ## CTime syntax
 

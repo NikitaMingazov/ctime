@@ -53,14 +53,10 @@ static const char *msg =
 	goto err_cleanup;
 
 #define SOURCE_ARG \
-	if (args->in_stream) { \
+	if (args->in_path) { \
 		ERR("Only one source file is permitted") \
 	} \
-	source_path = argv[i]; \
-	args->in_stream = fopen(argv[i], "r"); \
-	if (!args->in_stream) { \
-		ERR("Could not open source file for reading"); \
-	} \
+	args->in_path = argv[i]; \
 	continue;
 
 #define ARG_LIST_APPEND_FN(field, fname) \
@@ -84,7 +80,7 @@ ARG_LIST_APPEND_FN(cc_args, append_cc_arg)
 	status = 1; \
 	goto err_cleanup;
 
-char *replace_extension(char *path, const char *extension) {
+char *replace_extension(const char *path, const char *extension) {
 	char *new_ext = strdup(path);
 	char *dot = strrchr(new_ext, '.');
 	if (dot)
@@ -132,7 +128,8 @@ int main(int argc, char **argv) {
 	}
 	append_lib_name(args, "ctime", &num_lib_names);
 	bool optsdone = false;
-	char *source_path = NULL;
+	bool stdin_as_source = false;
+	bool stdout_as_target = false;
 	for (int i = 1; i < argc; ++i) {
 		if (optsdone) { // after --
 			SOURCE_ARG
@@ -142,7 +139,7 @@ int main(int argc, char **argv) {
 			SOURCE_ARG
 		} else {
 			if (!argv[i][1]) { // '-'
-				args->in_stream = stdin;
+				stdin_as_source = true;
 				continue;
 			}
 			switch (argv[i][1]) {
@@ -154,17 +151,14 @@ int main(int argc, char **argv) {
 				SINGLE_CHAR_FLAG('T')
 				case 'o':
 					if (!argv[i][2]) {
-						if (args->out_stream) {
+						if (args->out_file) {
 							PAR_ERR("extra -o arg")
 						}
 						if (++i < argc) {
 							if (strlen(argv[i]) == 1 && argv[i][0] == '-') {
-								args->out_stream = stdout;
+								stdout_as_target = true;
 							} else {
-								args->out_stream = fopen(argv[i], "w");
-								if (!args->out_stream) {
-									ERR("Could not open target file for writing")
-								}
+								args->out_file = argv[i];
 							}
 						} else {
 							PAR_ERR("missing -o parameter")
@@ -215,42 +209,21 @@ int main(int argc, char **argv) {
 			}
 		}
 	}
-	if (!args->in_stream) {
+	if (!args->in_path && !stdin_as_source) {
 		PAR_ERR("missing source file")
 	}
-	// set .ct to c and .ht to h as the default, otherwise stdout
-	if (!args->out_stream && !args->print_ast) {
-		if (source_path) {
-			int len = strlen(source_path);
-			if (len >= 3 && memcmp(source_path+len-3, ".ct", 3) == 0) {
-				char *to_c = replace_extension(source_path, ".c");
-				args->out_stream = fopen(to_c, "w");
-				if (!args->out_stream) {
-					fprintf(stderr, "Could not open %s for writing\n", to_c);
-					status = 1;
-					goto err_cleanup;
-				}
-			} else if (len >= 3 && memcmp(source_path+len-3, ".ht", 3) == 0) {
-				char *to_h = replace_extension(source_path, ".h");
-				args->out_stream = fopen(to_h, "w");
-				if (!args->out_stream) {
-					fprintf(stderr, "Could not open %s for writing\n", to_h);
-					status = 1;
-					goto err_cleanup;
-				}
-			} else {
-				args->out_stream = stdout;
+	// set .ct to c and as the default, otherwise stdout
+	if (!stdout_as_target && !args->out_file && !args->print_ast) {
+		if (!stdin_as_source) {
+			int len = strlen(args->in_path);
+			if (len >= 3 && memcmp(args->in_path+len-3, ".ct", 3) == 0) {
+				char *to_c = replace_extension(args->in_path, ".c");
+				args->in_path = to_c;
 			}
-		} else {
-			args->out_stream = stdout;
 		}
 	}
 	status = transpile_ct(args);
 err_cleanup:
-	if (args->in_stream != stdin && args->in_stream)
-		fclose(args->in_stream);
-	if (args->out_stream != stdout && args->out_stream)
-		fclose(args->out_stream);
 	return status;
 }
 

@@ -27,8 +27,8 @@
 CTime_Args *ctime_default_args() {
 	CTime_Args *args = malloc(sizeof(*args));
 	*args = (CTime_Args) {
-		.in_stream = NULL,
-		.out_stream = NULL,
+		.in_path = NULL,
+		.out_file = NULL,
 		.transpile_n_layers = SIZE_MAX,
 		.compiler_args = malloc(sizeof(struct compiler_args)),
 		.tab_width = 4,
@@ -201,7 +201,7 @@ static char *preprocessed_str(Buffer *comptime_code, const char *str, CompilerAr
 	return preprocessed_slice;
 }
 
-static char *resolve_quote_node(const CTimeNode *quote_node, Buffer *compilable_code, Buffer *all_seen_code, CompilerArgs *args) {
+static char *resolve_quote_node(const CTimeNode *quote_node, Buffer *compilable_code, CompilerArgs *args) {
 	Buffer *inner = buffer_new();
 	char *s;
 	for (size_t i = 0; i < quote_node->num_children; ++i) {
@@ -230,7 +230,6 @@ static char *resolve_quote_node(const CTimeNode *quote_node, Buffer *compilable_
 static char *resolve_comptime_node(const CTimeNode *comptime, Buffer *comptime_code, CompilerArgs *args) {
 	Buffer *inner = buffer_new();
 	char *s;
-	Buffer *tmp_concat;
 	for (size_t i = 0; i < comptime->num_children; ++i) {
 		const CTimeNode *cur = comptime->children[i];
 		switch (cur->type) {
@@ -244,15 +243,9 @@ static char *resolve_comptime_node(const CTimeNode *comptime, Buffer *comptime_c
 				free(s);
 				break;
 			case N_QUOTE:
-				// macros do not need to be in a previous #{ }# block
-				// but insertions still do
-				tmp_concat = buffer_new();
-				buffer_append_buffer(tmp_concat, comptime_code);
-				buffer_append_buffer(tmp_concat, inner);
-				s = resolve_quote_node(cur, comptime_code, tmp_concat, args);
+				s = resolve_quote_node(cur, comptime_code, args);
 				if (!s) return NULL;
 				buffer_append_cstr(inner, s);
-				buffer_free(tmp_concat);
 				free(s);
 				break;
 			default: exit(1);
@@ -264,10 +257,21 @@ static char *resolve_comptime_node(const CTimeNode *comptime, Buffer *comptime_c
 }
 
 int transpile_ct(CTime_Args *args) {
-	Lexer *lex = lexer_new(args->in_stream, args->tab_width, args->print_tokens);
+	int status = 0;
+	FILE *in_stream = stdin;
+	if (args->in_path) {
+		in_stream = fopen(args->in_path, "r");
+		if (!in_stream) {
+			fprintf(stderr, "Could not open %s for reading\n", args->in_path);
+			return 1;
+		}
+	}
+	Lexer *lex = lexer_new(in_stream, args->tab_width, args->print_tokens);
 	CTimeNode *root = parse_into_tree(lex);
 
 	if (args->print_ast) {
+		if (in_stream != stdin)
+			fclose(in_stream);
 		ctime_print_tree(root);
 		ctime_node_free(root);
 		lexer_free(lex);
@@ -313,21 +317,35 @@ int transpile_ct(CTime_Args *args) {
 		}
 	}
 done:
+	if (error) {
+		status = 1;
+		goto err_cleanup;
+	}
+	FILE *out_stream = stdout;
+	if (args->out_file) {
+		out_stream = fopen(args->out_file, "w");
+		if (!out_stream) {
+			fprintf(stderr, "Could not open %s for writing\n", args->out_file);
+			status = 1;
+			goto err_cleanup;
+		}
+	}
 	if (terminated) {
 		buffer_null_terminate(comptime_code);
-		fprintf(args->out_stream, "%s\n", comptime_code->data);
-	} else if (!error) {
+		fprintf(out_stream, "%s\n", comptime_code->data);
+	} else {
 		buffer_null_terminate(target_code);
-		fprintf(args->out_stream, "%s\n", target_code->data);
+		fprintf(out_stream, "%s\n", target_code->data);
 		if (args->transpile_n_layers != SIZE_MAX)
 			fprintf(stderr, "\narg '-N (>=%d)' is ignored due to being complete\n", num_insertions);
 	}
 
+err_cleanup:
 	buffer_free(comptime_code);
 	buffer_free(target_code);
 
 	ctime_node_free(root);
 	lexer_free(lex);
-	return 0;
+	return status;
 }
 

@@ -7,9 +7,12 @@
 #include <stdio.h>
 
 typedef struct ctime_args {
-	FILE *in_stream;
-	FILE *out_stream;
+	// IO args (null for stdin/stdout)
+	const char *in_path;
+	const char *out_file;
+	// args for transpiler backend
 	struct compiler_args *compiler_args;
+	// debugging args
 	size_t transpile_n_layers;
 	unsigned tab_width;
 	bool print_ast;
