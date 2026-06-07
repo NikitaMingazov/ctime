@@ -1,4 +1,4 @@
 root := (<comptime> | <source> | <insert>)*
-<comptime> := #{ (<source> | <quote> | <insert>)* }#
+<comptime> := #{ (<source> | <quote> | <insert> | $$)* }#
 <quote> := '{ (<source> | <insert>)* }'
-<insert> := $( (<source> | <insert>)* )$
+<insert> := $( (<source> | <insert> | $$)* )$

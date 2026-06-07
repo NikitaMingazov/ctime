@@ -44,7 +44,7 @@ void buffer_null_terminate(Buffer *buf) {
 		buffer_append_char(buf, '\0');
 }
 
-char *buffer_to_cstr(const Buffer *buf) {
+char *buffer_clone_as_str(const Buffer *buf) {
 	char *s = malloc(buf->len + 1);
 	if (!s) return NULL;
 	if (buf->len > 0) {

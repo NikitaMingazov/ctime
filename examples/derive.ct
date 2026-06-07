@@ -17,7 +17,7 @@ one: void -> T // multiplicative identity
 */
 #{ // header
 const char *api = '{
-#include <ctime.h>
+#include <libctt.h>
 ctt_str derive_symbol(const char *T, const char *trait);
 #define STRARR(...) (const char*[]){ __VA_ARGS__, NULL }
 ctt_str derive(const char *T, const char **traits);
@@ -26,10 +26,7 @@ ctt_str derive(const char *T, const char **traits);
 // $( derive("int", STRARR("eq", "hash", "serialise")) )$
 // int false = $( derive_symbol("int", "eq") )$ (0, 1);
 }#
-#{
-#include <ctime.h>
-#include "hashmap.c"
-}#
+#{ $( ctt_include("hashmap.ct", $$) )$ }#
 #{
 #include <string.h>
 static size_t $( hash_trait("char*") )$ (const char* str)
@@ -65,10 +62,6 @@ ctt_str derive_symbol(const char *T, const char *trait) {
 $( derive_symbol_cstr_quote )$
 $( derive_symbol_quote )$
 }#
-#include <stddef.h>
-#include <stdlib.h>
-#include <string.h>
-
 #{
 ctt_str trait_header(const char *T, const char *trait) {
 	ctt_return(ct_format("%s (\n"
@@ -465,6 +458,12 @@ $( trait_header("char*", "zero") )$
 // ctt_str derive_struct(const char *struct_def, const char **traits {
 // }
 
+#include <libctt.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
+
+
 $( api )$
 
 $( derive_symbol_cstr_quote )$
@@ -481,7 +480,7 @@ static size_t $( hash_trait("char*") )$ (const char* str)
     return hash;
 }
 static int $( eq_trait("char*") )$ (char* a, char* b)
-	{ return strncmp(a, b, strlen(a)) == 0; }
+	{ return strcmp(a, b) == 0; }
 static char* $( serialise_trait("char*") )$ (char* a)
 	{ return a; }
 $( hm_template("char*", "char*") )$

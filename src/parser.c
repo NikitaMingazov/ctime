@@ -51,6 +51,9 @@ static void insert_production(Lexer *lex, CTimeNode *insert) {
 				append_child(insert, new_block);
 				insert_production(lex, new_block);
 				break;
+			case TOKEN_COMPARGS_REF:
+				append_child(insert, new_node(N_SOURCE_CODE, "__CC_ARGS__", tok.row, tok.col));
+				break;
 			case TOKEN_INSERTION_END:
 				return;
 			default:
@@ -72,6 +75,9 @@ static void quote_production(Lexer *lex, CTimeNode *quote) {
 				new_block = new_node(N_INSERT, NULL, tok.row, tok.col);
 				append_child(quote, new_block);
 				insert_production(lex, new_block);
+				break;
+			case TOKEN_COMPARGS_REF: // TODO: figure out if this is correct
+				append_child(quote, new_node(N_SOURCE_CODE, "__CC_ARGS__", tok.row, tok.col));
 				break;
 			case TOKEN_QUOTE_END:
 				return;
@@ -99,6 +105,9 @@ static void comptime_production(Lexer *lex, CTimeNode *comptime) {
 				new_block = new_node(N_QUOTE, NULL, tok.row, tok.col);
 				append_child(comptime, new_block);
 				quote_production(lex, new_block);
+				break;
+			case TOKEN_COMPARGS_REF:
+				append_child(comptime, new_node(N_SOURCE_CODE, "__CC_ARGS__", tok.row, tok.col));
 				break;
 			case TOKEN_CTIMEDEF_END:
 				return;
@@ -142,8 +151,8 @@ void ctime_node_free(CTimeNode *n) {
 	for (size_t i = 0; i < n->num_children; ++i) {
 		ctime_node_free(n->children[i]);
 	}
-	if (n->code)
-		free(n->code);
+	// if (n->code)  TODO: use an arena
+	// 	free(n->code);
 	free(n);
 }
 

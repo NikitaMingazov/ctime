@@ -21,7 +21,7 @@ char buffer_pop_end(Buffer *buf);
 
 // add null terminator if not already present
 void buffer_null_terminate(Buffer *buf);
-char *buffer_to_cstr(const Buffer *buf);
+char *buffer_clone_as_str(const Buffer *buf);
 // shrinks allocation to the actual length of content
 void buffer_compact(Buffer *buf);
 // frees the buffer and releases its content as a null-terminated string

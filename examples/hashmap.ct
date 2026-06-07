@@ -8,7 +8,7 @@
     lest a circular dependency occurs and I cannot build either
 */
 // API
-#include <ctime.h>
+#include <libctt.h>
 // trait symbols (for K)
 // T -> size_t
 ctt_str hash_trait(const char *T);
@@ -52,7 +52,7 @@ ctt_str hm_serialise_table(const char *K, const char *V);
 }#
 #{ // implementation
 const char *hm_template_quote = '{
-#include <ctime.h>
+#include <libctt.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
@@ -312,7 +312,7 @@ ctt_str test_hashmap() { ctt_return(""); }
 
 #ifndef TEST
 ctt_str export_c() {
-	ctt_return(ct_format("#include <ctime.h>\n"
+	ctt_return(ct_format("#include <libctt.h>\n"
 						 "const char *hm_template_quote = \"%s\";\n"
 						 "%s", ct_quote(hm_template_quote), api));
 }

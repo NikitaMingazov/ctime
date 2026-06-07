@@ -1,6 +1,5 @@
 #{
-#define CTIME_IMPLEMENTATION
-#include "ctime.h"
+#include <libctt.h>
 char *comptime_sum(int a, int b) {
 	int result = a + b;
 	char *s = ct_format("%d", result);

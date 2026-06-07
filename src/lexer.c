@@ -1,6 +1,6 @@
 #include "lexer.h"
 #include "buffer.h"
-#include "ctime.h"
+#include "libctt.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -111,7 +111,7 @@ void lexer_free(Lexer *lex) {
 		if (lex->buffer->len > 0 && lex->buffer->data[lex->buffer->len-1] == '\n') \
 			buffer_pop_end(lex->buffer); \
 	} \
-	s = buffer_to_cstr(lex->buffer); \
+	s = buffer_clone_as_str(lex->buffer); \
 	buffer_clear(lex->buffer); \
 	/* a string is before, return it and queue this token */ \
 	prev_row = lex->prev_row; \
@@ -204,6 +204,8 @@ Token lexer_next(Lexer *lex) {
 				switch (c) {
 					case '(':
 						PUSH_TOKEN(TOKEN_INSERTION_START)
+					case '$':
+						PUSH_TOKEN(TOKEN_COMPARGS_REF)
 					default:
 						state = S_CSOURCE;
 						goto epsilon;
@@ -285,7 +287,7 @@ Token lexer_next(Lexer *lex) {
 		}
 	}
 	if (lex->buffer->len > 0) {
-		char *final_source = buffer_to_cstr(lex->buffer);
+		char *final_source = buffer_clone_as_str(lex->buffer);
 		buffer_clear(lex->buffer);
 		return token_new(TOKEN_STRING, final_source, lex->prev_row, lex->prev_col, lex->debug_tokens);
 	}

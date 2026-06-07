@@ -30,4 +30,6 @@ libtcc is a dependency, which is usually found in your distro's "tcc" package. I
 
 \'\{ ... \}\' is a quote block that runs the preprocessor according to the comptime state before the quote, and replaces itself with its contents as string literal that is formatted such that when printed, is identical to the former block contents. There are no syntax or recursion concerns for it to use the previous comptime block state for the preprocessor, but these cannot be used in runtime C code.
 
+​\$​\$ resolves to a reference to the comptime arguments (for ctt_include("source.ct", ​\$​\$)), and is equivalent to the macro __CC_ARGS__, with the exception that it would be easier to only emit the arguments when ​\$​\$ is seen.
+
 The target source code is that which is not in any \#\{ \}\# block, and can use ​$( )​$ blocks to produce new C source code that you pass to your real compiler, import as a header etc.

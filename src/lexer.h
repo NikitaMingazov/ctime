@@ -9,7 +9,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-// tokens: <STRING>, #{, }#, $(, )$, <EOF>
+// tokens: <STRING>, #{, }#, $(, )$, $$, <EOF>
 typedef enum {
 	TOKEN_NONE, // option<token>
 	TOKEN_STRING,
@@ -19,6 +19,7 @@ typedef enum {
 	TOKEN_CTIMEDEF_END,
 	TOKEN_INSERTION_START,
 	TOKEN_INSERTION_END,
+	TOKEN_COMPARGS_REF,
 	TOKEN_EOF
 } TokenType;
 

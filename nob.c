@@ -1,4 +1,12 @@
+/*
+   options: local, static, install
+   local uses "" in the compilation unit for linking instead of <>
+   static produces a .a
+   install puts ctt and libctt in /usr/bin, /usr/lib and /usr/include
+*/
+
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #define NOB_IMPLEMENTATION
 #include "nob.h"
@@ -13,76 +21,117 @@
 #define SYSTEM_BIN_DIR "/usr/bin/"
 #endif // ifdef __unix__
 
-#define LDFLAGS "-ltcc"
+#define LDFLAGS "-lctt", "-ltcc"
 #define BUILD_DIR "build/"
 #define SRC_DIR "src/"
 
+#define PRE_C_SRC(X) SRC_DIR X
+#define POST_C_SRC(X) X ".c" ,
+
 #define BIN_TARGET BUILD_DIR "ctt"
-#define BIN_SOURCE_NAMES(PRE, POST) \
-	PRE(POST("main")) \
+#define BIN_SRC SRC_DIR "ctt.c"
+
+#define LIB_TARGET_DIR BUILD_DIR "libctt/"
+#define LIB_SOURCE_DIR SRC_DIR
+#define LIB_SOURCE_H LIB_SOURCE_DIR "libctt.h"
+#define LIB_SOURCE_C LIB_SOURCE_DIR "libctt.c"
+#define LIB_SOURCE_NAMES(PRE, POST) \
+	PRE(POST("libctt")) \
 	PRE(POST("buffer")) \
-	PRE(POST("ctt")) \
 	PRE(POST("comptime-backend")) \
 	PRE(POST("parser")) \
-	PRE(POST("lexer"))
-
-#define PRE(X) SRC_DIR X
-#define POST(X) X ".c" ,
-
-#define BIN_SOURCES BIN_SOURCE_NAMES(PRE, POST)
-
-#define LIB_TARGET_DIR BUILD_DIR "libctime/"
-// #define LIB_TARGET LIB_TARGET_DIR "libctime.so"
-#define LIB_SOURCE_DIR SRC_DIR
-#define LIB_NAME "ctime"
-#define LIB_SOURCE_C LIB_SOURCE_DIR LIB_NAME ".c"
-#define LIB_SOURCE_H LIB_SOURCE_DIR LIB_NAME ".h"
+	PRE(POST("lexer")) \
+	PRE(POST("ctime_utils"))
+#define LIB_C_SOURCES LIB_SOURCE_NAMES(PRE_C_SRC, POST_C_SRC)
+const char *lib_c_sources[] = { LIB_C_SOURCES NULL };
+#define PRE_O_TARGET(X) BUILD_DIR X
+#define POST_O_TARGET(X) X ".o" ,
+#define LIB_O_TARGETS LIB_SOURCE_NAMES(PRE_O_TARGET, POST_O_TARGET)
+const char *lib_o_targets[] = { LIB_O_TARGETS NULL };
 #define LIB_FLAGS "-fPIC", "-c"
 
-#define LIB_TARGET_H LIB_TARGET_DIR LIB_NAME ".h"
+#define LIB_NAME "ctt"
+#define LIB_TARGET_H LIB_TARGET_DIR "lib" LIB_NAME ".h"
 #define LIB_TARGET_SO LIB_TARGET_DIR "lib" LIB_NAME ".so"
+#define LIB_TARGET_A LIB_TARGET_DIR "lib" LIB_NAME ".a"
 
-/* char *sources_arr[] = {SOURCES}; */
-/* int num_sources = sizeof(sources_arr)/sizeof(sources_arr[1]); */
 
 int main(int argc, char **argv)
 {
+	bool local = true; // TODO: figure out build system API
+	bool install = false;
+	bool make_static_libctt = false;
+	bool clean = false;
+	for (size_t i = 1; argv[i]; ++i) {
+		if (strcmp(argv[i], "static") == 0)
+			make_static_libctt = true;
+		else if (strcmp(argv[i], "install") == 0)
+			install = true;
+		else if (strcmp(argv[i], "local") == 0)
+			local = true;
+		else if (strcmp(argv[i], "clean") == 0)
+			clean = true;
+	}
 	NOB_GO_REBUILD_URSELF(argc, argv);
 	if (nob_file_exists("./nob.old"))
 		nob_delete_file("./nob.old");
 	if (!nob_mkdir_if_not_exists(BUILD_DIR))
 		return 1;
 	Nob_Cmd cmd = {0};
-	// building ctt
-	nob_cmd_append(&cmd, CC, CFLAGS, WARNFLAGS, "-o", BIN_TARGET, BIN_SOURCES/*,*/ LDFLAGS);
-	if (!nob_cmd_run(&cmd)) return 1;
-	// building libctime.so
+	// building libctt
 	if (!nob_mkdir_if_not_exists(LIB_TARGET_DIR))
 		return 1;
-	nob_cmd_append(&cmd, CC, CFLAGS, LIB_FLAGS, WARNFLAGS, "-o", LIB_TARGET_DIR "libctime.o", LIB_SOURCE_C);
+	// make the .o files
+	for (size_t i = 0; lib_c_sources[i]; ++i) {
+		nob_cmd_append(&cmd, CC, CFLAGS, LIB_FLAGS, WARNFLAGS, "-o", lib_o_targets[i], lib_c_sources[i]);
+		if (!nob_cmd_run(&cmd)) return 1;
+	}
+	if (make_static_libctt) {
+		nob_cmd_append(&cmd, "ar", "rcs", LIB_TARGET_A, LIB_O_TARGETS);
+		if (!nob_cmd_run(&cmd)) return 1;
+	}
+	nob_cmd_append(&cmd, CC, "-shared", "-o", LIB_TARGET_SO, LIB_O_TARGETS);
 	if (!nob_cmd_run(&cmd)) return 1;
-	nob_cmd_append(&cmd, CC, "-shared", "-o", LIB_TARGET_SO, LIB_TARGET_DIR "libctime.o");
-	if (!nob_cmd_run(&cmd)) return 1;
-	if (nob_file_exists(LIB_TARGET_DIR "libctime.o"))
-		nob_delete_file(LIB_TARGET_DIR "libctime.o");
-	// copy ctime.h to be adjacent to libctime.so
+	// copy libctt.h to be adjacent to libctt.so
 	if (!nob_copy_file(LIB_SOURCE_H, LIB_TARGET_H)) return 1;
-	if (argc >= 2 && memcmp(argv[1], "install", strlen("install")+1) == 0) {
-#ifndef __unix__
-#error "nob install is only supported on unix systems"
-#endif
+	// installing to /usr
+	if (install) {
+		if (!nob_copy_file(LIB_TARGET_H, SYSTEM_HEADER_DIR "lib"LIB_NAME".h")) {
+			fprintf(stderr, "Could not install libctt.h, are you sure this was run as root?\n");
+			return 1;
+		}
+		if (!nob_copy_file(LIB_TARGET_SO, SYSTEM_LIB_DIR "lib"LIB_NAME".so")) {
+			fprintf(stderr, "Could not install libctt.so, are you sure this was run as root?\n");
+			return 1;
+		}
+	}
+	// building ctt
+	if (local) {
+		nob_cmd_append(&cmd, CC, CFLAGS, WARNFLAGS, "-DLOCAL_LIBCTT", "-o", BIN_TARGET, BIN_SRC, LIB_O_TARGETS/*,*/ LDFLAGS);
+	} else if (make_static_libctt) {
+		nob_cmd_append(&cmd, CC, CFLAGS, WARNFLAGS, "-o", BIN_TARGET, BIN_SRC, LIB_TARGET_A, LDFLAGS);
+	} else { // include /usr/includes/libctt.h
+		nob_cmd_append(&cmd, CC, CFLAGS, WARNFLAGS, "-o", BIN_TARGET, BIN_SRC, LDFLAGS);
+	}
+	if (!nob_cmd_run(&cmd)) return 1;
+	if (install) {
 		if (!nob_copy_file(BIN_TARGET, SYSTEM_BIN_DIR "ctt")) {
 			fprintf(stderr, "Could not install ctt, are you sure this was run as root?\n");
 			return 1;
 		}
-		if (!nob_copy_file(LIB_TARGET_H, SYSTEM_HEADER_DIR LIB_NAME".h")) {
-			fprintf(stderr, "Could not install libctime, are you sure this was run as root?\n");
-			return 1;
-		}
-		if (!nob_copy_file(LIB_TARGET_SO, SYSTEM_LIB_DIR LIB_NAME".so")) {
-			fprintf(stderr, "Could not install libctime, are you sure this was run as root?\n");
-			return 1;
-		}
+	}
+	for (size_t i = 0; lib_o_targets[i]; ++i) {
+		nob_delete_file(lib_o_targets[i]);
+	}
+	if (clean) {
+		if (nob_file_exists(LIB_TARGET_SO))
+			nob_delete_file(LIB_TARGET_SO);
+		if (nob_file_exists(LIB_TARGET_A))
+			nob_delete_file(LIB_TARGET_A);
+		if (nob_file_exists(LIB_TARGET_H))
+			nob_delete_file(LIB_TARGET_H);
+		if (nob_file_exists(BIN_TARGET))
+			nob_delete_file(BIN_TARGET);
 	}
 	return 0;
 }

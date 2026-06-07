@@ -2,7 +2,7 @@
 #include <stdlib.h>
 
 #include "comptime-backend.h"
-#include "ctime.h"
+#include "libctt.h"
 #include <libtcc.h>
 
 #include "../nob.h"

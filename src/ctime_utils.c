@@ -1,73 +1,4 @@
-/*
-  A single header library intended for use inside of comptime code
-  Provides an API for ctt, and useful string functions under ct_
-*/
-#ifndef CTIME_H
-#define CTIME_H
-
-#include <stdio.h>
-#include <stdarg.h>
-#include <stddef.h>
-
-// transpiler comp-runtime (ctt)
-
-// I might make a new type to return more information to the transpiler
-// As far as I have in mind, NULL for error is sufficient
-// But this API will always be valid
-
-// the type returned by insertion macros
-#define ctt_str char*
-
-// Managed memory to be freed by ctt_return (WIP)
-#define ctt_alloc(ALLOC_SIZE) \
-	malloc(ALLOC_SIZE)
-
-// Returns a string for use in macros (currently just a normal char*)
-#define ctt_return(STR) \
-	return (ctt_str)STR
-
-// Returns an error to transpiler and prints a given string to stderr
-#define ctt_error(STR) \
-	fprintf(stderr, "%s\n", STR); \
-	return (ctt_str)NULL; \
-
-// If an expression is false, returns an error to the transpiler
-// and prints a given string to stderr
-#define ctt_assert(BOOL, STR) \
-	do { \
-		if (!(BOOL)) { \
-			fprintf(stderr, "assertion failed: %s\n", STR); \
-			return (ctt_str)NULL; \
-		} \
-	} while (0)
-
-// useful functions (ct)
-
-#ifndef CTIME_PREFIX
-#define CTIME_PREFIX ct_
-#endif
-
-#define CT_CONCAT(a, b) a ## b
-#define CT_CONCAT_EXPAND(a, b) CT_CONCAT(a, b)  // forces expansion of arguments
-#define CT_NAME(name) CT_CONCAT_EXPAND(CTIME_PREFIX, name)
-/* #define CT_CONCAT(CT_FIRST, CT_SECOND) CT_FIRST ## CT_SECOND */
-/* #define CT_NAME(name) CTIME_PREFIX ## name */
-
-// returns a string that when printed, is identical to itself as source code minus the ""
-// defaults to ct_quote
-char *CT_NAME(quote)(const char *s);
-
-// returns a new formatted string
-char *CT_NAME(format)(const char *fmt, ...);
-
-// replaces substrings with a given string, and returns a new string
-char *CT_NAME(substr_replace)(const char *s, const char *find, const char *replace);
-
-// counts how many occurrences of a substring are present
-int CT_NAME(substr_count)(const char *s, const char *substr);
-
-#ifdef CTIME_IMPLEMENTATION
-
+#include "libctt.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -208,8 +139,4 @@ int CT_NAME(substr_count)(const char *s, const char *substr) {
 	}
 	return count;
 }
-
-#endif /* CTIME_IMPLEMENTATION */
-
-#endif /* CTIME_H */
 

@@ -7,17 +7,7 @@
 #include <libtcc.h>
 #include <stddef.h>
 
-typedef struct compiler_args {
-	// NULL for libtcc in memory
-	const char *cc;
-	// null terminated arrays of strings
-	const char **include_dirs;
-	const char **lib_dirs;
-	const char **lib_names;
-	const char **defines;
-	// arbitrary args (for non-null cc)
-	const char **cc_args;
-} CompilerArgs;
+#include "libctt.h"
 
 enum backend_type {
 	BACKEND_TCC_MEM,

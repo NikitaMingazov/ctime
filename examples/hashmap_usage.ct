@@ -1,13 +1,16 @@
 /*
-   0: transpile hashmap.ct with ctt
-   1: include as hashmap.c in comptime code
-   2: transpile this with ctt
-   3: compile with real compiler
+   this is usage in .ct using ctt_include
+   alternatively you can pretranspile it to C:
+     0: transpile hashmap.ct with ctt
+     1: include as hashmap.c in comptime code
+     2: transpile this with ctt
+     3: compile this with real compiler
 */
 #include <stdio.h>
 #include <assert.h>
 #{
-#include "hashmap.c"
+$( ctt_include("hashmap.ct", $$) )$
+// #include "hashmap.c"
 }#
 
 int $( hash_trait("int") )$ (int a)
@@ -42,4 +45,3 @@ int main(){
 	// ctt_return("tests passed");
 	return 0;
 }
-
