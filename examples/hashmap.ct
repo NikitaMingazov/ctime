@@ -37,6 +37,8 @@ ctt_str hm_insert(const char *K, const char *V);
 ctt_str hm_remove(const char *K, const char *V);
 // dump the table array as a string
 ctt_str hm_serialise_table(const char *K, const char *V);
+// helper fn
+char *hm_format_type(const char *T);
 // todo: this API for generics
 // 0: use hm_template for the type
 // 1: use hm_define inside of #{ }# to create an instance of the type
@@ -122,7 +124,7 @@ static size_t HM_%fK_%fV_index(const HM_%fK_%fV *HM, const %K K, int attempt) {
 	return ( hash_%fK(K) + (i + i^2)/2 ) % HM->capacity; // c1 = 1, c2 = 1
 }
 // for different const contexts
-#define HM_GET_NODE_BODY \
+#define HM_GET_NODE_%fK_%fV_BODY \
     for (size_t i = 0; ; ++i) { \
         size_t index = HM_%fK_%fV_index(HM, K, i); \
         if (HM->table[index].not_null) { \
@@ -134,10 +136,10 @@ static size_t HM_%fK_%fV_index(const HM_%fK_%fV *HM, const %K K, int attempt) {
         } \
     }
 static struct HM_Node%fK_%fV *HM_%fK_%fV_get_node_mut(HM_%fK_%fV *HM, const %K K) {
-	HM_GET_NODE_BODY
+	HM_GET_NODE_%fK_%fV_BODY
 }
 static const struct HM_Node%fK_%fV *HM_%fK_%fV_get_node(const HM_%fK_%fV *HM, const %K K) {
-	HM_GET_NODE_BODY
+	HM_GET_NODE_%fK_%fV_BODY
 }
 static %V HM_%fK_%fV_get(const HM_%fK_%fV *HM, const %K K) {
 	const struct HM_Node%fK_%fV *adr = HM_%fK_%fV_get_node(HM, K);
@@ -152,7 +154,6 @@ static bool HM_%fK_%fV_contains(const HM_%fK_%fV *HM, const %K K) {
 		return false;
 }
 static void HM_%fK_%fV_remove(HM_%fK_%fV *HM, const %K K) {
-	return;
 	struct HM_Node%fK_%fV *adr = HM_%fK_%fV_get_node_mut(HM, K);
 	if (adr) {
 		adr->not_null = false;
@@ -193,21 +194,26 @@ static void HM_%fK_%fV_insert(HM_%fK_%fV *HM, const %K K, const %V V) {
 }#
 #{
 char *api = '{
-ctt_str hash_trait(const char *T) {
+char *hm_format_type(const char *T) {
 	char *T_fmted = ct_substr_replace(T, "*", "_PTR_");
+	T_fmted = ct_substr_replace(T_fmted, "const ", "const_");
+	return T_fmted;
+}
+ctt_str hash_trait(const char *T) {
+	char *T_fmted = hm_format_type(T);
 	ctt_return(ct_format("hash_%s", T_fmted));
 }
 ctt_str eq_trait(const char *T) {
-	char *T_fmted = ct_substr_replace(T, "*", "_PTR_");
+	char *T_fmted = hm_format_type(T);
 	ctt_return(ct_format("eq_%s", T_fmted));
 }
 ctt_str serialise_trait(const char *T) {
-	char *T_fmted = ct_substr_replace(T, "*", "_PTR_");
+	char *T_fmted = hm_format_type(T);
 	ctt_return(ct_format("serialise_%s", T_fmted));
 }
 ctt_str hm_template(const char *K, const char *V) {
-	char *K_fmted = ct_substr_replace(K, "*", "_PTR_");
-	char *V_fmted = ct_substr_replace(V, "*", "_PTR_");
+	char *K_fmted = hm_format_type(K);
+	char *V_fmted = hm_format_type(V);
 	char *guard = ct_format("GUARD_HM_%s_%s_C", K_fmted, V_fmted);
 	char *guarded_template = ct_format("#ifndef %s\n#define %s\n%s\n#endif\n", guard, guard, hm_template_quote);
 	// replacing * in mangled typenames but not inner types
@@ -216,13 +222,13 @@ ctt_str hm_template(const char *K, const char *V) {
 	return formatted;
 }
 ctt_str hm(const char *K, const char *V) {
-	char *K_fmted = ct_substr_replace(K, "*", "_PTR_");
-	char *V_fmted = ct_substr_replace(V, "*", "_PTR_");
+	char *K_fmted = hm_format_type(K);
+	char *V_fmted = hm_format_type(V);
 	return ct_format("HM_%s_%s", K_fmted, V_fmted);
 }
 ctt_str hm_node(const char *K, const char *V) {
-	char *K_fmted = ct_substr_replace(K, "*", "_PTR_");
-	char *V_fmted = ct_substr_replace(V, "*", "_PTR_");
+	char *K_fmted = hm_format_type(K);
+	char *V_fmted = hm_format_type(V);
 	return ct_format("HM_Node%s_%s", K_fmted, V_fmted);
 }
 ctt_str hm_new(const char *K, const char *V) {
@@ -256,6 +262,8 @@ $( api )$ // this corresponds to #{ #include hashmap.c }#
 #{
 // #ifndef NOTEST
 #include <stdlib.h>
+#include <string.h>
+#include <libctt.h>
 size_t $( hash_trait("int") )$ (int a)
 	{ return a; }
 int $( eq_trait("int") )$ (int a, int b)
@@ -267,6 +275,20 @@ char* $( serialise_trait("int") )$ (int a)
 		return s;
 	}
 $( hm_template("int", "int") )$
+
+size_t $( hash_trait("const char*") )$ (const char* s)
+	{
+		unsigned long h = 5381;
+		while (*s) h = h * 33 ^ *s++;
+		return h;
+	}
+int $( eq_trait("const char*") )$ (const char* a, const char* b)
+	{ return strcmp(a, b) == 0; }
+char* $( serialise_trait("const char*") )$ (const char* a)
+	{
+		return ct_format("\"%s\"", a);
+	}
+$( hm_template("const char*", "const char*") )$
 // #endif
 }#
 #{
@@ -280,6 +302,10 @@ $( hm_template("int", "int") )$
 
 ctt_str test_hashmap() {
 	int val;
+	char *s;
+	puts("=====================================");
+	puts("int->int");
+	puts("=====================================");
 	$( hm("int", "int") )$ *int_to_int = $( hm_new("int", "int") )$ ();
 	puts("inserting (4,5)");
 	$( hm_insert("int", "int") )$ (int_to_int, 4, 5);
@@ -301,7 +327,22 @@ ctt_str test_hashmap() {
 	$( hm_remove("int", "int") )$ (int_to_int, 7);
 	val = $( hm_contains("int", "int") )$ (int_to_int, 7);
 	printf("contains 7: %b\n", val);
+	ctt_assert(val == 0, "val == 0");
 	char *table = $( hm_serialise_table("int", "int") )$ (int_to_int);
+	printf("%s\n", table);
+	puts("=====================================");
+	puts("const char*->const char*");
+	puts("=====================================");
+	$( hm("const char*", "const char*") )$ *str_to_str = $( hm_new("const char*", "const char*") )$ ();
+	puts("inserting (\"n\",\"g\")");
+	$( hm_insert("const char*", "const char*") )$ (str_to_str, "n", "g");
+	val = $( hm_contains("const char*", "const char*") )$ (str_to_str, "n");
+	printf("contains \"n\": %d\n", val);
+	ctt_assert(val == 1, "val == 1");
+	val = $( hm_contains("const char*", "const char*") )$ (str_to_str, "g");
+	printf("contains \"g\": %d\n", val);
+	ctt_assert(val == 0, "val == 0");
+	table = $( hm_serialise_table("const char*", "const char*") )$ (str_to_str);
 	printf("%s\n", table);
 	// ctt_return("tests passed");
 	ctt_return("");

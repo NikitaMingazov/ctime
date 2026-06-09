@@ -18,8 +18,12 @@ one: void -> T // multiplicative identity
 #{ // header
 const char *api = '{
 #include <libctt.h>
+// str
 ctt_str derive_symbol(const char *T, const char *trait);
+// bool
+ctt_str derive_has_impl(const char *T, const char *trait);
 #define STRARR(...) (const char*[]){ __VA_ARGS__, NULL }
+// str
 ctt_str derive(const char *T, const char **traits);
 }' ;
 // usage:
@@ -29,7 +33,7 @@ ctt_str derive(const char *T, const char **traits);
 #{ $( ctt_include("hashmap.ct", $$) )$ }#
 #{
 #include <string.h>
-static size_t $( hash_trait("char*") )$ (const char* str)
+static size_t $( hash_trait("const char*") )$ (const char* str)
 {
 	unsigned long hash = 5381;
 	int c;
@@ -39,11 +43,11 @@ static size_t $( hash_trait("char*") )$ (const char* str)
     }
     return hash;
 }
-static int $( eq_trait("char*") )$ (const char* a, const char* b)
+static int $( eq_trait("const char*") )$ (const char* a, const char* b)
 	{ return strncmp(a, b, strlen(a)) == 0; }
-static char* $( serialise_trait("char*") )$ (const char* a)
+static char* $( serialise_trait("const char*") )$ (const char* a)
 	{ return ct_format("\"%s\"", ct_quote(a)); }
-$( hm_template("char*", "char*") )$
+$( hm_template("const char*", "const char*") )$
 }#
 #{ // quoted to be used in comptime and runtime
 char *derive_symbol_cstr_quote = '{
@@ -67,7 +71,7 @@ ctt_str trait_header(const char *T, const char *trait) {
 	ctt_return(ct_format("%s (\n"
 			             "default_derivations,\n"
 					     "%s,\n",
-	           hm_insert("char*", "char*"),
+	           hm_insert("const char*", "const char*"),
 	           ct_format("\"%s\"", derive_symbol(T, trait))
 	                    )
 	          );
@@ -75,7 +79,7 @@ ctt_str trait_header(const char *T, const char *trait) {
 }#
 #{
 ctt_str export_default_derivations() {
-	$( hm("char*", "char*") )$* default_derivations = $( hm_new("char*", "char*") )$ ();
+	$( hm("const char*", "const char*") )$* default_derivations = $( hm_new("const char*", "const char*") )$ ();
 
 	// trait_header factors out:
 	// $( hm_insert("char*", "char*") )$ (
@@ -84,25 +88,25 @@ ctt_str export_default_derivations() {
 /* int */
 	$( trait_header("int", "eq") )$
 		'{
-		int $( derive_symbol("int", "eq") )$ (int a, int b)
+		static int $( derive_symbol("int", "eq") )$ (int a, int b)
 			{ return a == b; }
 		}'
 	);
 	$( trait_header("int", "ord") )$
 		'{
-		int $( derive_symbol("int", "ord") )$ (int a, int b)
+		static int $( derive_symbol("int", "ord") )$ (int a, int b)
 			{ return (a > b) - (a < b); }
 		}'
 	);
 	$( trait_header("int", "hash") )$
 		'{
-		size_t $( derive_symbol("int", "hash") )$ (int a)
+		static size_t $( derive_symbol("int", "hash") )$ (int a)
 			{ return (size_t)a; }
 		}'
 	);
 	$( trait_header("int", "serialise") )$
 		'{
-		char* $( derive_symbol("int", "serialise") )$ (int a)
+		static char* $( derive_symbol("int", "serialise") )$ (int a)
 			{
 				char *s = malloc(12);
 				snprintf(s, 12, "%d", a);
@@ -112,43 +116,43 @@ ctt_str export_default_derivations() {
 	);
 	$( trait_header("int", "deserialise") )$
 		'{
-		int $( derive_symbol("int", "deserialise") )$ (char *s)
+		static int $( derive_symbol("int", "deserialise") )$ (char *s)
 			{ return atoi(s); }
 		}'
 	);
 	$( trait_header("int", "add") )$
 		'{
-		int $( derive_symbol("int", "add") )$ (int a, int b)
+		static int $( derive_symbol("int", "add") )$ (int a, int b)
 			{ return a + b; }
 		}'
 	);
 	$( trait_header("int", "add_inplace") )$
 		'{
-		void $( derive_symbol("int", "add_inplace") )$ (int *a, int b)
+		static void $( derive_symbol("int", "add_inplace") )$ (int *a, int b)
 			{ *a += b; }
 		}'
 	);
 	$( trait_header("int", "zero") )$
 		'{
-		int $( derive_symbol("int", "zero") )$ (void)
+		static int $( derive_symbol("int", "zero") )$ (void)
 			{ return 0; }
 		}'
 	);
 	$( trait_header("int", "mul") )$
 		'{
-		int $( derive_symbol("int", "mul") )$ (int a, int b)
+		static int $( derive_symbol("int", "mul") )$ (int a, int b)
 			{ return a * b; }
 		}'
 	);
 	$( trait_header("int", "mul_inplace") )$
 		'{
-		void $( derive_symbol("int", "mul_inplace") )$ (int *a, int b)
+		static void $( derive_symbol("int", "mul_inplace") )$ (int *a, int b)
 			{ *a *= b; }
 		}'
 	);
 	$( trait_header("int", "one") )$
 		'{
-		int $( derive_symbol("int", "one") )$ (void)
+		static int $( derive_symbol("int", "one") )$ (void)
 			{ return 1; }
 		}'
 	);
@@ -156,25 +160,25 @@ ctt_str export_default_derivations() {
 /* long */
 	$( trait_header("long", "eq") )$
 		'{
-		int $( derive_symbol("long", "eq") )$ (long a, long b)
+		static int $( derive_symbol("long", "eq") )$ (long a, long b)
 			{ return a == b; }
 		}'
 	);
 	$( trait_header("long", "ord") )$
 		'{
-		int $( derive_symbol("long", "ord") )$ (long a, long b)
+		static int $( derive_symbol("long", "ord") )$ (long a, long b)
 			{ return (a > b) - (a < b); }
 		}'
 	);
 	$( trait_header("long", "hash") )$
 		'{
-		size_t $( derive_symbol("long", "hash") )$ (long a)
+		static size_t $( derive_symbol("long", "hash") )$ (long a)
 			{ return (size_t)a; }
 		}'
 	);
 	$( trait_header("long", "serialise") )$
 		'{
-		char* $( derive_symbol("long", "serialise") )$ (long a)
+		static char* $( derive_symbol("long", "serialise") )$ (long a)
 			{
 				char *s = malloc(21);
 				snprintf(s, 21, "%ld", a);
@@ -184,43 +188,43 @@ ctt_str export_default_derivations() {
 	);
 	$( trait_header("long", "deserialise") )$
 		'{
-		long $( derive_symbol("long", "deserialise") )$ (char *s)
+		static long $( derive_symbol("long", "deserialise") )$ (char *s)
 			{ return atol(s); }
 		}'
 	);
 	$( trait_header("long", "add") )$
 		'{
-		long $( derive_symbol("long", "add") )$ (long a, long b)
+		static long $( derive_symbol("long", "add") )$ (long a, long b)
 			{ return a + b; }
 		}'
 	);
 	$( trait_header("long", "add_inplace") )$
 		'{
-		void $( derive_symbol("long", "add_inplace") )$ (long *a, long b)
+		static void $( derive_symbol("long", "add_inplace") )$ (long *a, long b)
 			{ *a += b; }
 		}'
 	);
 	$( trait_header("long", "zero") )$
 		'{
-		long $( derive_symbol("long", "zero") )$ (void)
+		static long $( derive_symbol("long", "zero") )$ (void)
 			{ return 0L; }
 		}'
 	);
 	$( trait_header("long", "mul") )$
 		'{
-		long $( derive_symbol("long", "mul") )$ (long a, long b)
+		static long $( derive_symbol("long", "mul") )$ (long a, long b)
 			{ return a * b; }
 		}'
 	);
 	$( trait_header("long", "mul_inplace") )$
 		'{
-		void $( derive_symbol("long", "mul_inplace") )$ (long *a, long b)
+		static void $( derive_symbol("long", "mul_inplace") )$ (long *a, long b)
 			{ *a *= b; }
 		}'
 	);
 	$( trait_header("long", "one") )$
 		'{
-		long $( derive_symbol("long", "one") )$ (void)
+		static long $( derive_symbol("long", "one") )$ (void)
 			{ return 1L; }
 		}'
 	);
@@ -228,19 +232,19 @@ ctt_str export_default_derivations() {
 /* float */
 	$( trait_header("float", "eq") )$
 		'{
-		int $( derive_symbol("float", "eq") )$ (float a, float b)
+		static int $( derive_symbol("float", "eq") )$ (float a, float b)
 			{ return a == b; }
 		}'
 	);
 	// $( trait_header("float", "ord") )$
 	// 	'{
-	// 	int $( derive_symbol("float", "ord") )$ (float a, float b)
+	// 	static int $( derive_symbol("float", "ord") )$ (float a, float b)
 	// 		{ return (a > b) - (a < b); }
 	// 	}'
 	// );
 	$( trait_header("float", "hash") )$
 		'{
-		size_t $( derive_symbol("float", "hash") )$ (float a)
+		static size_t $( derive_symbol("float", "hash") )$ (float a)
 			{
 				union { float f; size_t u; } u = { .f = a };
 				return u.u;
@@ -249,7 +253,7 @@ ctt_str export_default_derivations() {
 	);
 	// $( trait_header("float", "serialise") )$
 	// 	'{
-	// 	char* $( derive_symbol("float", "serialise") )$ (float a)
+	// 	static char* $( derive_symbol("float", "serialise") )$ (float a)
 	// 		{
 	// 			char *s = malloc(32);
 	// 			snprintf(s, 32, "%g", a);
@@ -259,43 +263,43 @@ ctt_str export_default_derivations() {
 	// );
 	// $( trait_header("float", "deserialise") )$
 	// 	'{
-	// 	float $( derive_symbol("float", "deserialise") )$ (char *s)
+	// 	static float $( derive_symbol("float", "deserialise") )$ (char *s)
 	// 		{ return strtof(s, NULL); }
 	// 	}'
 	// );
 	$( trait_header("float", "add") )$
 		'{
-		float $( derive_symbol("float", "add") )$ (float a, float b)
+		static float $( derive_symbol("float", "add") )$ (float a, float b)
 			{ return a + b; }
 		}'
 	);
 	$( trait_header("float", "add_inplace") )$
 		'{
-		void $( derive_symbol("float", "add_inplace") )$ (float *a, float b)
+		static void $( derive_symbol("float", "add_inplace") )$ (float *a, float b)
 			{ *a += b; }
 		}'
 	);
 	$( trait_header("float", "zero") )$
 		'{
-		float $( derive_symbol("float", "zero") )$ (void)
+		static float $( derive_symbol("float", "zero") )$ (void)
 			{ return 0.0f; }
 		}'
 	);
 	$( trait_header("float", "mul") )$
 		'{
-		float $( derive_symbol("float", "mul") )$ (float a, float b)
+		static float $( derive_symbol("float", "mul") )$ (float a, float b)
 			{ return a * b; }
 		}'
 	);
 	$( trait_header("float", "mul_inplace") )$
 		'{
-		void $( derive_symbol("float", "mul_inplace") )$ (float *a, float b)
+		static void $( derive_symbol("float", "mul_inplace") )$ (float *a, float b)
 			{ *a *= b; }
 		}'
 	);
 	$( trait_header("float", "one") )$
 		'{
-		float $( derive_symbol("float", "one") )$ (void)
+		static float $( derive_symbol("float", "one") )$ (void)
 			{ return 1.0f; }
 		}'
 	);
@@ -303,19 +307,19 @@ ctt_str export_default_derivations() {
 /* double */
 	$( trait_header("double", "eq") )$
 		'{
-		int $( derive_symbol("double", "eq") )$ (double a, double b)
+		static int $( derive_symbol("double", "eq") )$ (double a, double b)
 			{ return a == b; }
 		}'
 	);
 	// $( trait_header("double", "ord") )$
 	// 	'{
-	// 	int $( derive_symbol("double", "ord") )$ (double a, double b)
+	// 	static int $( derive_symbol("double", "ord") )$ (double a, double b)
 	// 		{ return (a > b) - (a < b); }
 	// 	}'
 	// );
 	$( trait_header("double", "hash") )$
 		'{
-		size_t $( derive_symbol("double", "hash") )$ (double a)
+		static size_t $( derive_symbol("double", "hash") )$ (double a)
 			{
 				union { double d; size_t u; } u = { .d = a };
 				return u.u;
@@ -324,7 +328,7 @@ ctt_str export_default_derivations() {
 	);
 	// $( trait_header("double", "serialise") )$
 	// 	'{
-	// 	char* $( derive_symbol("double", "serialise") )$ (double a)
+	// 	static char* $( derive_symbol("double", "serialise") )$ (double a)
 	// 		{
 	// 			char *s = malloc(32);
 	// 			snprintf(s, 32, "%g", a);
@@ -334,63 +338,63 @@ ctt_str export_default_derivations() {
 	// );
 	// $( trait_header("double", "deserialise") )$
 	// 	'{
-	// 	double $( derive_symbol("double", "deserialise") )$ (char *s)
+	// 	static double $( derive_symbol("double", "deserialise") )$ (char *s)
 	// 		{ return strtod(s, NULL); }
 	// 	}'
 	// );
 	$( trait_header("double", "add") )$
 		'{
-		double $( derive_symbol("double", "add") )$ (double a, double b)
+		static double $( derive_symbol("double", "add") )$ (double a, double b)
 			{ return a + b; }
 		}'
 	);
 	$( trait_header("double", "add_inplace") )$
 		'{
-		void $( derive_symbol("double", "add_inplace") )$ (double *a, double b)
+		static void $( derive_symbol("double", "add_inplace") )$ (double *a, double b)
 			{ *a += b; }
 		}'
 	);
 	$( trait_header("double", "zero") )$
 		'{
-		double $( derive_symbol("double", "zero") )$ (void)
+		static double $( derive_symbol("double", "zero") )$ (void)
 			{ return 0.0; }
 		}'
 	);
 	$( trait_header("double", "mul") )$
 		'{
-		double $( derive_symbol("double", "mul") )$ (double a, double b)
+		static double $( derive_symbol("double", "mul") )$ (double a, double b)
 			{ return a * b; }
 		}'
 	);
 	$( trait_header("double", "mul_inplace") )$
 		'{
-		void $( derive_symbol("double", "mul_inplace") )$ (double *a, double b)
+		static void $( derive_symbol("double", "mul_inplace") )$ (double *a, double b)
 			{ *a *= b; }
 		}'
 	);
 	$( trait_header("double", "one") )$
 		'{
-		double $( derive_symbol("double", "one") )$ (void)
+		static double $( derive_symbol("double", "one") )$ (void)
 			{ return 1.0; }
 		}'
 	);
 
-/* char* */
-$( trait_header("char*", "eq") )$
+	/* char* */
+	$( trait_header("char*", "eq") )$
 		'{
-		int $( derive_symbol("char*", "eq") )$ (char *a, char *b)
+			static int $( derive_symbol("char*", "eq") )$ (char *a, char *b)
 			{ return strcmp(a, b) == 0; }
 		}'
 	);
-$( trait_header("char*", "ord") )$
+	$( trait_header("char*", "ord") )$
 		'{
-		int $( derive_symbol("char*", "ord") )$ (char *a, char *b)
+			static int $( derive_symbol("char*", "ord") )$ (char *a, char *b)
 			{ return strcmp(a, b); }
 		}'
 	);
-$( trait_header("char*", "hash") )$
+	$( trait_header("char*", "hash") )$
 		'{
-		size_t $( derive_symbol("char*", "hash") )$ (char *a)
+			static size_t $( derive_symbol("char*", "hash") )$ (char *a)
 			{
 				size_t h = 5381;
 				for (unsigned char *p = (unsigned char*)a; *p; ++p)
@@ -399,21 +403,21 @@ $( trait_header("char*", "hash") )$
 			}
 		}'
 	);
-// $( trait_header("char*", "serialise") )$
-// 		'{
-// 		char* $( derive_symbol("char*", "serialise") )$ (char *a)
-// 			{ return strdup(a); }
-// 		}'
-// 	);
-// $( trait_header("char*", "deserialise") )$
-// 		'{
-// 		char* $( derive_symbol("char*", "deserialise") )$ (char *s)
-// 			{ return strdup(s); }
-// 		}'
-// 	);
-$( trait_header("char*", "add") )$
+	// $( trait_header("char*", "serialise") )$
+	// 		'{
+	// 		static char* $( derive_symbol("char*", "serialise") )$ (char *a)
+	// 			{ return strdup(a); }
+	// 		}'
+	// 	);
+	// $( trait_header("char*", "deserialise") )$
+	// 		'{
+	// 		static char* $( derive_symbol("char*", "deserialise") )$ (char *s)
+	// 			{ return strdup(s); }
+	// 		}'
+	// 	);
+	$( trait_header("char*", "add") )$
 		'{
-		char* $( derive_symbol("char*", "add") )$ (char *a, char *b)
+			static char* $( derive_symbol("char*", "add") )$ (char *a, char *b)
 			{
 				char *s = malloc(strlen(a) + strlen(b) + 1);
 				strcpy(s, a);
@@ -422,29 +426,28 @@ $( trait_header("char*", "add") )$
 			}
 		}'
 	);
-$( trait_header("char*", "add_inplace") )$
+	$( trait_header("char*", "add_inplace") )$
 		'{
-		void $( derive_symbol("char*", "add_inplace") )$ (char **a, char *b)
+			static void $( derive_symbol("char*", "add_inplace") )$ (char **a, char *b)
 			{
 				*a = realloc(*a, strlen(*a) + strlen(b) + 1);
 				strcat(*a, b);
 			}
 		}'
 	);
-$( trait_header("char*", "zero") )$
+	$( trait_header("char*", "zero") )$
 		'{
-		char* $( derive_symbol("char*", "zero") )$ (void)
+			static char* $( derive_symbol("char*", "zero") )$ (void)
 			{ return strdup(""); }
 		}'
 	);
-/* mul, mul_inplace, one not implemented */
 
 	char *default_derivs_len = ct_format("%zu", default_derivations->num_elements);
 	char *default_derivs_cap = ct_format("%zu", default_derivations->capacity);
-	char *default_derivs_table = $( hm_serialise_table("char*", "char*") )$ (default_derivations);
+	char *default_derivs_table = $( hm_serialise_table("const char*", "const char*") )$ (default_derivations);
 	const char *definition_quote = '{
-	const $( hm_node("char*", "char*") )$ default_derivs_table[] = %s;
-	const $( hm("char*", "char*") )$ default_derivations = ( $( hm("char*", "char*") )$ ) {
+	const $( hm_node("const char*", "const char*") )$ default_derivs_table[] = %s;
+	const $( hm("const char*", "const char*") )$ default_derivations = ( $( hm("const char*", "const char*") )$ ) {
 		.num_elements = %s,
 		.capacity = %s,
 		.table = default_derivs_table
@@ -469,7 +472,7 @@ $( api )$
 $( derive_symbol_cstr_quote )$
 $( derive_symbol_quote )$
 
-static size_t $( hash_trait("char*") )$ (const char* str)
+static size_t $( hash_trait("const char*") )$ (const char* str)
 {
 	unsigned long hash = 5381;
 	int c;
@@ -479,11 +482,11 @@ static size_t $( hash_trait("char*") )$ (const char* str)
     }
     return hash;
 }
-static int $( eq_trait("char*") )$ (char* a, char* b)
+static int $( eq_trait("const char*") )$ (char* a, char* b)
 	{ return strcmp(a, b) == 0; }
-static char* $( serialise_trait("char*") )$ (char* a)
+static char* $( serialise_trait("const char*") )$ (char* a)
 	{ return a; }
-$( hm_template("char*", "char*") )$
+$( hm_template("const char*", "const char*") )$
 $( export_default_derivations() )$
 
 // derive the given traits for a primitive type
@@ -494,11 +497,11 @@ ctt_str derive(const char *T, const char **traits) {
 	const char **cursor = traits;
 	for (; *cursor; ++cursor) {
 		char *trait_symbol = derive_symbol_cstr(T, *cursor);
-		if (! $( hm_contains("char*", "char*") )$(&default_derivations, trait_symbol) ) {
+		if (! $( hm_contains("const char*", "const char*") )$(&default_derivations, trait_symbol) ) {
 			ctt_error(ct_format("%s does not have an implementation for %s", T, *cursor));
 		}
-		char *guard = ct_format("TRAIT_%s_%s", trait_symbol);
-		const char *derivation = $( hm_get("char*", "char*") )$(&default_derivations, trait_symbol);
+		// char *guard = ct_format("TRAIT_%s_%s", trait_symbol);
+		const char *derivation = $( hm_get("const char*", "const char*") )$(&default_derivations, trait_symbol);
 		size_t added_len = strlen(derivation);
 		derivations = realloc(derivations, total_len+added_len+1);
 		memcpy(derivations+total_len, derivation, added_len+1);
