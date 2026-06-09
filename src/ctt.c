@@ -57,6 +57,7 @@ static const char *msg =
 	if (in_path || stdin_as_source) { \
 		ERR("Only one source file is permitted") \
 	} \
+	compiler_args_add_include_dir(c_args, strdup(nob_temp_dir_name(argv[i]))); \
 	in_path = argv[i]; \
 	continue;
 
@@ -109,7 +110,6 @@ int main(int argc, char **argv) {
 			SOURCE_ARG
 		}
 		if (argv[i][0] != '-') {
-			compiler_args_add_include_dir(c_args, strdup(nob_temp_dir_name(argv[i])));
 			SOURCE_ARG
 		} else {
 			if (!argv[i][1]) { // '-'
@@ -208,12 +208,13 @@ int main(int argc, char **argv) {
 			int len = strlen(in_path);
 			if (len >= 3 && memcmp(in_path+len-3, ".ct", 3) == 0) {
 				char *to_c = replace_extension(in_path, ".c");
-				in_path = to_c;
-				free(to_c);
+				out_path = to_c;
 			}
 		}
 	}
 	int status = ctt_transpile_ct(in_path, out_path, c_args, d_args);
+	compiler_args_free(c_args);
+	free(d_args);
 	return status;
 }
 

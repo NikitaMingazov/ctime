@@ -6,6 +6,7 @@
 #ifndef LEXER_H
 #define LEXER_H
 
+#include "arena.h"
 #include <stdbool.h>
 #include <stdio.h>
 
@@ -46,7 +47,7 @@ typedef struct {
 
 typedef struct Lexer Lexer;
 
-Lexer *lexer_new(FILE *in_stream, unsigned hard_tab_width, bool debug);
+Lexer *lexer_new(FILE *in_stream, unsigned hard_tab_width, bool debug, Arena *lifetime);
 void lexer_free(Lexer *lex);
 Token lexer_next(Lexer *lex);
 

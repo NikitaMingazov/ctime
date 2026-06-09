@@ -71,10 +71,6 @@ char *ctt_transpile_str(const char *source_code, const CompilerArgs *args);
 // Returns NULL if there was an error
 ctt_str ctt_include(const char *source_path, CompilerArgs *args);
 
-// Managed memory arena to be freed by ctt_return (WIP)
-#define ctt_alloc(ALLOC_SIZE) \
-	malloc(ALLOC_SIZE)
-
 // Returns a string for use in macros (currently just a normal char*)
 #define ctt_return(STR) \
 	return (ctt_str)STR
@@ -112,6 +108,9 @@ char *CT_NAME(quote)(const char *s);
 
 // returns a new formatted string
 char *CT_NAME(format)(const char *fmt, ...);
+
+// returns a clone of the string
+char *CT_NAME(strdup)(const char *s);
 
 // replaces substrings with a given string, and returns a new string
 char *CT_NAME(substr_replace)(const char *s, const char *find, const char *replace);

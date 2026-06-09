@@ -9,7 +9,7 @@
 #include <string.h>
 #include <unistd.h>
 
-CTimeNode *new_node(enum node_type type, char *code, unsigned row, unsigned col) {
+static CTimeNode *new_node(enum node_type type, char *code, unsigned row, unsigned col) {
 	CTimeNode *new = malloc(sizeof(*new));
 	*new = (CTimeNode) {
 		.type = type,
@@ -22,7 +22,7 @@ CTimeNode *new_node(enum node_type type, char *code, unsigned row, unsigned col)
 	return new;
 }
 
-void append_child(CTimeNode *n, CTimeNode *child) {
+static void append_child(CTimeNode *n, CTimeNode *child) {
 	++n->num_children;
 	n->children = realloc(n->children, n->num_children * sizeof(*n->children));
 	n->children[n->num_children-1] = child;
@@ -147,12 +147,12 @@ CTimeNode *parse_into_tree(Lexer *lex) {
 	return root;
 }
 
+// the string is owned by an arena, the node array is realloc so heap ptrs
 void ctime_node_free(CTimeNode *n) {
 	for (size_t i = 0; i < n->num_children; ++i) {
 		ctime_node_free(n->children[i]);
 	}
-	// if (n->code)  TODO: use an arena
-	// 	free(n->code);
+	free(n->children);
 	free(n);
 }
 
@@ -163,7 +163,7 @@ static void print_tree_inner(CTimeNode *n, unsigned level) {
 		memcpy(prefix+i*strlen(indent), indent, strlen(indent));
 	}
 	prefix[level*strlen(indent)] = '\0';
-	fprintf(stderr, "%s%s (%d:%d) %.20s\n", prefix, NODE_TYPE_STR[n->type], n->row, n->col, n->code);
+	fprintf(stderr, "%s%s (%d:%d) %.0s\n", prefix, NODE_TYPE_STR[n->type], n->row, n->col, n->code);
 	free(prefix);
 	for (size_t i = 0; i < n->num_children; ++i) {
 		print_tree_inner(n->children[i], level+1);

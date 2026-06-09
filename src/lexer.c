@@ -1,4 +1,5 @@
 #include "lexer.h"
+#include "arena.h"
 #include "buffer.h"
 #include "libctt.h"
 #include <assert.h>
@@ -27,6 +28,7 @@ void token_free(Token tok) {
 
 struct Lexer {
 	FILE *in_stream;
+	Arena *str_lifetime;
 	Token next;
 	Buffer *buffer;
 	unsigned prev_row;
@@ -37,7 +39,7 @@ struct Lexer {
 	bool debug_tokens;
 };
 
-Lexer *lexer_new(FILE *in_stream, unsigned hard_tab_width, bool debug) {
+Lexer *lexer_new(FILE *in_stream, unsigned hard_tab_width, bool debug, Arena *str_lifetime) {
 	Lexer *lex = malloc(sizeof(*lex));
 	if (!lex) {
 		fprintf(stderr, "out of memory\n");
@@ -45,6 +47,7 @@ Lexer *lexer_new(FILE *in_stream, unsigned hard_tab_width, bool debug) {
 	}
 	*lex = (Lexer) {
 		.in_stream = in_stream,
+		.str_lifetime = str_lifetime,
 		.next = token_new(TOKEN_NONE, NULL, 0, 0, debug),
 		.buffer = buffer_new(),
 		.prev_col = 1,
@@ -100,8 +103,9 @@ void lexer_free(Lexer *lex) {
 	} \
 	if (lex->buffer->len == 0) { /* no string before */ \
 		new_token = token_new(TYPE, NULL, lex->cur_row, lex->cur_col-2, lex->debug_tokens); \
-		if (TYPE == TOKEN_CTIMEDEF_START) \
+		if (TYPE == TOKEN_CTIMEDEF_START) { \
 			CONSUME_NEWLINE \
+		} \
 		lex->prev_row = lex->cur_row; \
 		lex->prev_col = lex->cur_col; \
 		return new_token; \
@@ -111,7 +115,10 @@ void lexer_free(Lexer *lex) {
 		if (lex->buffer->len > 0 && lex->buffer->data[lex->buffer->len-1] == '\n') \
 			buffer_pop_end(lex->buffer); \
 	} \
-	s = buffer_clone_as_str(lex->buffer); \
+	/* copy out the string in the buffer */ \
+	buffer_null_terminate(lex->buffer); \
+	s = arena_alloc(lex->str_lifetime, lex->buffer->len); \
+	memcpy(s, lex->buffer->data, lex->buffer->len); \
 	buffer_clear(lex->buffer); \
 	/* a string is before, return it and queue this token */ \
 	prev_row = lex->prev_row; \
@@ -287,7 +294,9 @@ Token lexer_next(Lexer *lex) {
 		}
 	}
 	if (lex->buffer->len > 0) {
-		char *final_source = buffer_clone_as_str(lex->buffer);
+		buffer_null_terminate(lex->buffer);
+		char *final_source = arena_alloc(lex->str_lifetime, lex->buffer->len);
+		memcpy(final_source, lex->buffer->data, lex->buffer->len);
 		buffer_clear(lex->buffer);
 		return token_new(TOKEN_STRING, final_source, lex->prev_row, lex->prev_col, lex->debug_tokens);
 	}

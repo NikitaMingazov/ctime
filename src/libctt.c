@@ -6,6 +6,9 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
+#define ARENA_IMPLEMENTATION
+#include "arena.h"
+
 #include <assert.h>
 #include <libgen.h>
 
@@ -30,7 +33,7 @@
 #endif // ifdef __unix__
 
 // length of null-terminated array
-static size_t arrlen(const char **arr) {
+static size_t arrlen(const char * const *arr) {
 	size_t num_args = 0;
 	for (size_t i = 0; arr[i]; ++i) {
 		++num_args;
@@ -82,9 +85,11 @@ static char *compiler_args_serialise(const CompilerArgs *args) {
     if (!args) return strdup("NULL");
 	Buffer *buf = buffer_new();
 	buffer_append_cstr(buf, "(CompilerArgs) {\n\t.cc = ");
-	if (args->cc)
+	if (args->cc) {
+		buffer_append_char(buf, '"');
 		buffer_append_cstr(buf, args->cc);
-	else
+		buffer_append_char(buf, '"');
+	} else
 		buffer_append_cstr(buf, "NULL");
 	buffer_append_cstr(buf, ",\n");
     #define SERIALISE_STR_ARRAY(FIELD) do { \
@@ -102,23 +107,30 @@ static char *compiler_args_serialise(const CompilerArgs *args) {
 	SERIALISE_STR_ARRAY(defines);
 	SERIALISE_STR_ARRAY(cc_args);
 	#undef SERIALISE_STR_ARRAY
+	buffer_append_cstr(buf, "\t.is_freestanding = ");
+	if (args->is_freestanding)
+		buffer_append_cstr(buf, "true,\n");
+	else
+		buffer_append_cstr(buf, "false,\n");
 	buffer_append_cstr(buf, "};\n");
 	return buffer_to_cstr_move(buf);
 }
 
 CompilerArgs *compiler_args_clone(const CompilerArgs *args_other) {
 	CompilerArgs *cloned = malloc(sizeof(*cloned));
-	*cloned = (CompilerArgs) {
-	};
-	cloned->cc = args_other->cc;
+	if (args_other->cc)
+		cloned->cc = strdup(args_other->cc);
+	else
+	 	cloned->cc = NULL;
+	cloned->is_freestanding = args_other->is_freestanding;
 	#define CLONE_FIELD(field) \
-		cloned->field = calloc(arrlen(args_other->field)+1, sizeof(char*)); \
+		cloned->field = calloc(arrlen((const char * const *)args_other->field)+1, sizeof(char*)); \
 		/* calloc 0-inits, so it is already null-terminated */ \
-		for (size_t i = 0; i < arrlen(args_other->field); ++i) { \
-			cloned->field[i] = args_other->field[i]; \
+		for (size_t i = 0; i < arrlen((const char * const *)args_other->field); ++i) { \
+			cloned->field[i] = strdup(args_other->field[i]); \
 		}
-	CLONE_FIELD(defines)
-	CLONE_FIELD(include_dirs)
+    CLONE_FIELD(defines)
+    CLONE_FIELD(include_dirs)
 	CLONE_FIELD(lib_dirs)
 	CLONE_FIELD(lib_names)
 	CLONE_FIELD(cc_args)
@@ -131,6 +143,7 @@ void compiler_args_free(CompilerArgs *c) {
 	free(c->include_dirs);
 	free(c->lib_dirs);
 	free(c->lib_names);
+	free(c->cc_args);
 	free(c);
 }
 
@@ -142,7 +155,7 @@ char *strdup_impl(const char *s) {
 }
 
 void compiler_args_set_cc(CompilerArgs *args, const char *cc) {
-	args->cc = cc;
+	args->cc = strdup(cc);
 }
 #define ARG_LIST_APPEND_FN(field, fname) \
 void fname(CompilerArgs *args, const char *new_arg) { \
@@ -174,6 +187,7 @@ DebuggingArgs *debugging_args_init() {
 
 #ifdef UNIX_SEGFAULT_GUARD
 // forks a new process to call the comptime function from, to catch segfaults
+// as a side effect, it also cleans up memory
 static char* segfault_safe_call(char *(*unsafe_fn)(void)) {
 	int pipefd[2];
 	if (pipe(pipefd) == -1) {
@@ -241,6 +255,7 @@ static char *evaluate_expr(Buffer *source_code, const char *expr, CompilerArgs *
 	#define eval_symbol_name "__COMPTIME_EVAL"
 	char *eval_fn = ct_format("\nchar* "eval_symbol_name"() { return %s; }", expr);
 	buffer_append_cstr(source_code, eval_fn);
+	free(eval_fn);
 	buffer_null_terminate(source_code);
 	ComptimeBackend *be = comptime_compile(source_code->data, args);
 	if (!be) {
@@ -344,9 +359,11 @@ static char *resolve_quote_node(const CTimeNode *quote_node, Buffer *compilable_
 	}
 	// wrap in quotes to produce a strlit of the quote
 	s = buffer_to_cstr_move(inner);
-	char *quoted = ct_format("\"%s\"", ct_quote(s));
+	char *quoted = ct_quote(s);
+	char *formatted = ct_format("\"%s\"", quoted);
+	free(quoted);
 	free(s);
-	return quoted;
+	return formatted;
 }
 
 static char *resolve_comptime_node(const CTimeNode *comptime, Buffer *comptime_code, CompilerArgs *args) {
@@ -422,6 +439,7 @@ done:
 
 int ctt_transpile_ct(const char *source_path, const char *target_path, const CompilerArgs *c_args, const DebuggingArgs *d_args) {
 	int status = 0;
+	Arena lexer_arena = {0};
 	DebuggingArgs *d_args_nonnull;
 	if (d_args) {
 		d_args_nonnull = malloc(sizeof(*d_args_nonnull));
@@ -460,12 +478,10 @@ int ctt_transpile_ct(const char *source_path, const char *target_path, const Com
 		free(dir_of_source);
 	}
 
-	Lexer *lex = lexer_new(in_stream, d_args->tab_width, d_args->print_tokens);
+	Lexer *lex = lexer_new(in_stream, d_args->tab_width, d_args->print_tokens, &lexer_arena);
 	CTimeNode *root = parse_into_tree(lex);
 
 	if (d_args_nonnull->print_ast) {
-		if (in_stream != stdin)
-			fclose(in_stream);
 		ctime_print_tree(root);
 		status = 1;
 		goto defer_ast;
@@ -498,19 +514,25 @@ int ctt_transpile_ct(const char *source_path, const char *target_path, const Com
 			fprintf(stderr, "\narg '-N (>=%d)' is ignored due to being complete\n", num_insertions);
 	}
 
+	if (out_stream && out_stream != stdout)
+		fclose(out_stream);
 defer_target_buffer:
 	buffer_free(target_code);
 defer_ast:
+	if (in_stream && in_stream != stdin)
+		fclose(in_stream);
 	ctime_node_free(root);
 	lexer_free(lex);
 defer_comptime:
 	buffer_free(comptime_code);
 	compiler_args_free(c_args_nonnull);
 	free(d_args_nonnull);
+	arena_free(&lexer_arena);
 	return status;
 }
 
 char *ctt_transpile_str(const char *source_code, const CompilerArgs *args) {
+	Arena lexer_arena = {0};
 	CompilerArgs *c_args_nonnull;
 	if (args)
 		c_args_nonnull = compiler_args_clone(args);
@@ -519,7 +541,8 @@ char *ctt_transpile_str(const char *source_code, const CompilerArgs *args) {
 	FILE* in_stream = fmemopen((void*)source_code, strlen(source_code), "r");
 	DebuggingArgs *d_args = debugging_args_init();
 
-	Lexer *lex = lexer_new(in_stream, d_args->tab_width, d_args->print_tokens);
+
+	Lexer *lex = lexer_new(in_stream, d_args->tab_width, d_args->print_tokens, &lexer_arena);
 	CTimeNode *root = parse_into_tree(lex);
 	fclose(in_stream);
 
@@ -539,6 +562,7 @@ char *ctt_transpile_str(const char *source_code, const CompilerArgs *args) {
 		return NULL;
 	}
 	char *transpiled = buffer_to_cstr_move(target_code);
+	arena_free(&lexer_arena);
 	return transpiled;
 }
 
@@ -584,5 +608,12 @@ ctt_str ctt_include(const char *filename, CompilerArgs *args) {
 	} else {
 		ctt_error(ct_format("Transpilation of ctt_include \"%s\" failed", filename));
 	}
+}
+
+char *CT_NAME(strdup)(const char *s) {
+	const size_t len = strlen(s);
+	char *new_s = malloc(len+1);
+	memcpy(new_s, s, len+1);
+	return new_s;
 }
 
