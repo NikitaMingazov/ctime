@@ -57,6 +57,9 @@ int ctt_transpile_ct(const char *source_path, const char *target_path, const Com
 // Returns NULL if there was an error
 char *ctt_transpile_str(const char *source_code, const CompilerArgs *args);
 
+// returns a string preprocessed as if it were after the given context
+char *ctt_preprocess(const char *context, const char *str, const CompilerArgs *args);
+
 // =================================================================================
 // transpiler runtime (ctt_)
 

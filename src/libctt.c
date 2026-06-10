@@ -317,13 +317,18 @@ static char *resolve_insert_node(const CTimeNode *insert, Buffer *comptime_code,
 	return insertion;
 }
 
-static char *preprocessed_str(Buffer *comptime_code, const char *str, CompilerArgs *args) {
-	const size_t code_len = comptime_code->len;
+char *ctt_preprocess(const char *comptime_code, const char *str, const CompilerArgs *args) {
+	if (!args->cc) {
+		fprintf(stderr, "error in preprocessed str: in-memory tcc doesn't support usage as a preprocessor\n");
+		return NULL;
+	}
+	Buffer *comptime_code_tmp = buffer_new();
+	buffer_append_cstr(comptime_code_tmp, comptime_code);
 	const char *sentinel = "__123456789COMPTIME\n";
-	buffer_append_cstr(comptime_code, sentinel);
-	buffer_append_cstr(comptime_code, str);
-	buffer_append_char(comptime_code, '\0');
-	char *preprocessed_code = comptime_preprocess_str(comptime_code->data, args);
+	buffer_append_cstr(comptime_code_tmp, sentinel);
+	buffer_append_cstr(comptime_code_tmp, str);
+	buffer_append_char(comptime_code_tmp, '\0');
+	char *preprocessed_code = comptime_preprocess_str(comptime_code_tmp->data, args);
 	char *start = strstr(preprocessed_code, sentinel) + strlen(sentinel);
 	size_t len = strlen(start);
 	// strip trailing newline inserted by preprocessor
@@ -335,7 +340,7 @@ static char *preprocessed_str(Buffer *comptime_code, const char *str, CompilerAr
 	memcpy(preprocessed_slice, start, len);
 	preprocessed_slice[len] = '\0';
 	free(preprocessed_code);
-	comptime_code->len = code_len;
+	buffer_free(comptime_code_tmp);
 	return preprocessed_slice;
 }
 

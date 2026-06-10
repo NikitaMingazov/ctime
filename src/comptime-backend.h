@@ -37,7 +37,7 @@ ComptimeBackend *comptime_compile(const char *source_code, CompilerArgs *args);
 char *(*comptime_get_str_void_fn(ComptimeBackend *be, const char *sym))(void);
 void comptime_close(ComptimeBackend *be);
 
-char *comptime_preprocess_str(const char *to_preprocess, CompilerArgs *args);
+char *comptime_preprocess_str(const char *to_preprocess, const CompilerArgs *args);
 
 #endif // CTT_BACKEND_H
 

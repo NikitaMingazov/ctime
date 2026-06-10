@@ -172,7 +172,7 @@ char *read_whole_file(const char *filename) {
 	return buffer;
 }
 
-char *comptime_preprocess_str(const char *to_preprocess, CompilerArgs *args) {
+char *comptime_preprocess_str(const char *to_preprocess, const CompilerArgs *args) {
 	#define APPEND_STRARR_TO_CMD(ARR, PREFIX) \
 	for (size_t i = 0; ARR[i]; ++i) { \
 		char *arg = ct_format(PREFIX"%s", ARR[i]); \
