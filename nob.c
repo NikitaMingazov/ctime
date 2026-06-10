@@ -55,26 +55,70 @@ const char *lib_o_targets[] = { LIB_O_TARGETS NULL };
 #define LIB_TARGET_SO LIB_TARGET_DIR "lib" LIB_NAME ".so"
 #define LIB_TARGET_A LIB_TARGET_DIR "lib" LIB_NAME ".a"
 
+const char *help =
+"usage: %s [OPTIONS]\n"
+"options:\n"
+" split_source     use multiple compilation units instead of unity build\n"
+" no_install       only build into ./build/ without installing to /usr\n"
+" clean            instead of building, remove build targets\n"
+" dynamic_libctt   dynamically link libctt in ctt\n"
+" build_static     build libctt.a\n"
+" -h               print this message\n"
+;
 
 int main(int argc, char **argv)
 {
-	bool local = true; // TODO: figure out build system API
-	bool install = false;
-	bool make_static_libctt = false;
-	bool clean = false;
-	for (size_t i = 1; argv[i]; ++i) {
-		if (strcmp(argv[i], "static") == 0)
-			make_static_libctt = true;
-		else if (strcmp(argv[i], "install") == 0)
-			install = true;
-		else if (strcmp(argv[i], "local") == 0)
-			local = true;
-		else if (strcmp(argv[i], "clean") == 0)
-			clean = true;
-	}
 	NOB_GO_REBUILD_URSELF(argc, argv);
 	if (nob_file_exists("./nob.old"))
 		nob_delete_file("./nob.old");
+	bool split_source = false;
+	bool no_install = false;
+	bool clean = false;
+	bool dynamic_libctt = false;
+	bool build_static = false;
+	for (size_t i = 1; argv[i]; ++i) {
+		if (strcmp(argv[i], "-h") == 0) {
+			printf(help, argv[0]);
+			return 0;
+		} else if (strcmp(argv[i], "build_static") == 0)
+			build_static = true;
+		else if (strcmp(argv[i], "dynamic_libctt") == 0)
+			dynamic_libctt = true;
+		else if (strcmp(argv[i], "no_install") == 0)
+			no_install = true;
+		else if (strcmp(argv[i], "split_source") == 0)
+			split_source = true;
+		else if (strcmp(argv[i], "clean") == 0)
+			clean = true;
+		else {
+			printf("%s: invalid argument: %s\n", argv[0], argv[i]);
+			printf(help, argv[0]);
+			return 0;
+		}
+	}
+	if (dynamic_libctt)
+		split_source = true;
+	char *define_dynamic_libctt = nob_temp_sprintf("-DDYNAMIC_LIBCTT=%d", dynamic_libctt);
+	char *define_one_source = nob_temp_sprintf("-DONE_SOURCE=%d", !split_source);
+	if (clean) {
+		for (size_t i = 0; lib_o_targets[i]; ++i) {
+			if (nob_file_exists(lib_o_targets[i]))
+				nob_delete_file(lib_o_targets[i]);
+		}
+		if (clean) {
+			if (nob_file_exists(LIB_TARGET_SO))
+				nob_delete_file(LIB_TARGET_SO);
+			if (nob_file_exists(LIB_TARGET_A))
+				nob_delete_file(LIB_TARGET_A);
+			if (nob_file_exists(LIB_TARGET_H))
+				nob_delete_file(LIB_TARGET_H);
+			if (nob_file_exists(LIB_TARGET_DIR))
+				nob_delete_file(LIB_TARGET_DIR);
+			if (nob_file_exists(BIN_TARGET))
+				nob_delete_file(BIN_TARGET);
+		}
+		return 0;
+	}
 	if (!nob_mkdir_if_not_exists(BUILD_DIR))
 		return 1;
 	Nob_Cmd cmd = {0};
@@ -82,20 +126,37 @@ int main(int argc, char **argv)
 	if (!nob_mkdir_if_not_exists(LIB_TARGET_DIR))
 		return 1;
 	// make the .o files
-	for (size_t i = 0; lib_c_sources[i]; ++i) {
-		nob_cmd_append(&cmd, CC, CFLAGS, LIB_FLAGS, WARNFLAGS, "-o", lib_o_targets[i], lib_c_sources[i]);
+	if (split_source) {
+		for (size_t i = 0; lib_c_sources[i]; ++i) {
+			nob_cmd_append(&cmd, CC, CFLAGS, LIB_FLAGS, WARNFLAGS, define_one_source, "-o", lib_o_targets[i], lib_c_sources[i]);
+			if (!nob_cmd_run(&cmd)) return 1;
+		}
+	} else {
+		nob_cmd_append(&cmd, CC, CFLAGS, LIB_FLAGS, WARNFLAGS, define_one_source, "-o", BUILD_DIR "libctt.o", LIB_SOURCE_C);
 		if (!nob_cmd_run(&cmd)) return 1;
 	}
-	if (make_static_libctt) {
-		nob_cmd_append(&cmd, "ar", "rcs", LIB_TARGET_A, LIB_O_TARGETS);
+	if (build_static) {
+		if (split_source)
+			nob_cmd_append(&cmd, "ar", "rcs", LIB_TARGET_A, LIB_O_TARGETS);
+		else
+			nob_cmd_append(&cmd, "ar", "rcs", LIB_TARGET_A, BUILD_DIR "libctt.o");
 		if (!nob_cmd_run(&cmd)) return 1;
 	}
-	nob_cmd_append(&cmd, CC, "-shared", "-o", LIB_TARGET_SO, LIB_O_TARGETS);
+	if (split_source)
+		nob_cmd_append(&cmd, CC, "-shared", "-o", LIB_TARGET_SO, LIB_O_TARGETS);
+	else
+		nob_cmd_append(&cmd, CC, "-shared", "-o", LIB_TARGET_SO, BUILD_DIR "libctt.o");
 	if (!nob_cmd_run(&cmd)) return 1;
 	// copy libctt.h to be adjacent to libctt.so
 	if (!nob_copy_file(LIB_SOURCE_H, LIB_TARGET_H)) return 1;
 	// installing to /usr
-	if (install) {
+	if (!no_install) {
+		if (build_static) {
+			if (!nob_copy_file(LIB_TARGET_H, SYSTEM_HEADER_DIR "lib"LIB_NAME".a")) {
+				fprintf(stderr, "Could not install libctt.a, are you sure this was run as root?\n");
+				return 1;
+			}
+		}
 		if (!nob_copy_file(LIB_TARGET_H, SYSTEM_HEADER_DIR "lib"LIB_NAME".h")) {
 			fprintf(stderr, "Could not install libctt.h, are you sure this was run as root?\n");
 			return 1;
@@ -106,32 +167,23 @@ int main(int argc, char **argv)
 		}
 	}
 	// building ctt
-	if (local) {
-		nob_cmd_append(&cmd, CC, CFLAGS, WARNFLAGS, "-DLOCAL_LIBCTT", "-o", BIN_TARGET, BIN_SRC, LIB_O_TARGETS/*,*/ LDFLAGS);
-	} else if (make_static_libctt) {
-		nob_cmd_append(&cmd, CC, CFLAGS, WARNFLAGS, "-o", BIN_TARGET, BIN_SRC, LIB_TARGET_A, LDFLAGS);
-	} else { // include /usr/includes/libctt.h
-		nob_cmd_append(&cmd, CC, CFLAGS, WARNFLAGS, "-o", BIN_TARGET, BIN_SRC, LDFLAGS);
-	}
+	if (split_source)
+		nob_cmd_append(&cmd, CC, CFLAGS, WARNFLAGS, define_dynamic_libctt, define_one_source, "-o", BIN_TARGET, BIN_SRC, LIB_O_TARGETS/*,*/ LDFLAGS);
+	else
+		nob_cmd_append(&cmd, CC, CFLAGS, WARNFLAGS, define_dynamic_libctt, define_one_source, "-o", BIN_TARGET, BIN_SRC, LDFLAGS);
+	// if (build_static) {
+	// 	nob_cmd_append(&cmd, CC, CFLAGS, WARNFLAGS, "-o", BIN_TARGET, BIN_SRC, LIB_TARGET_A, LDFLAGS);
+	// }
 	if (!nob_cmd_run(&cmd)) return 1;
-	if (install) {
+	if (!no_install) {
 		if (!nob_copy_file(BIN_TARGET, SYSTEM_BIN_DIR "ctt")) {
 			fprintf(stderr, "Could not install ctt, are you sure this was run as root?\n");
 			return 1;
 		}
 	}
 	for (size_t i = 0; lib_o_targets[i]; ++i) {
-		nob_delete_file(lib_o_targets[i]);
-	}
-	if (clean) {
-		if (nob_file_exists(LIB_TARGET_SO))
-			nob_delete_file(LIB_TARGET_SO);
-		if (nob_file_exists(LIB_TARGET_A))
-			nob_delete_file(LIB_TARGET_A);
-		if (nob_file_exists(LIB_TARGET_H))
-			nob_delete_file(LIB_TARGET_H);
-		if (nob_file_exists(BIN_TARGET))
-			nob_delete_file(BIN_TARGET);
+		if (nob_file_exists(lib_o_targets[i]))
+			nob_delete_file(lib_o_targets[i]);
 	}
 	return 0;
 }

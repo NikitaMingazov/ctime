@@ -2,6 +2,8 @@
    Implementation of the transpiler
 */
 // for fmemopen //TODO: make a generic char iterator with an unget method
+#define _DEFAULT_SOURCE
+
 #ifdef __unix__
 #define _POSIX_C_SOURCE 200809L
 #endif
@@ -12,12 +14,25 @@
 #include <assert.h>
 #include <libgen.h>
 
+#if DYNAMIC_LIBCTT
+#include <libctt.h>
+#else
 #include "libctt.h"
-#include <libtcc.h>
+#endif
+
 #include "comptime-backend.h"
 #include "buffer.h"
 #include "lexer.h"
 #include "parser.h"
+
+#if ONE_SOURCE
+#include "comptime-backend.c"
+#include "buffer.c"
+#include "lexer.c"
+#include "parser.c"
+#include "ctime_utils.c"
+#endif
+
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,7 +48,7 @@
 #endif // ifdef __unix__
 
 // length of null-terminated array
-static size_t arrlen(const char * const *arr) {
+static size_t arrlen(const char* const* arr) {
 	size_t num_args = 0;
 	for (size_t i = 0; arr[i]; ++i) {
 		++num_args;
@@ -82,7 +97,7 @@ CompilerArgs *compiler_args_init() {
 }
 
 static char *compiler_args_serialise(const CompilerArgs *args) {
-    if (!args) return strdup("NULL");
+    if (!args) return ct_strdup("NULL");
 	Buffer *buf = buffer_new();
 	buffer_append_cstr(buf, "(CompilerArgs) {\n\t.cc = ");
 	if (args->cc) {
@@ -119,7 +134,7 @@ static char *compiler_args_serialise(const CompilerArgs *args) {
 CompilerArgs *compiler_args_clone(const CompilerArgs *args_other) {
 	CompilerArgs *cloned = malloc(sizeof(*cloned));
 	if (args_other->cc)
-		cloned->cc = strdup(args_other->cc);
+		cloned->cc = ct_strdup(args_other->cc);
 	else
 	 	cloned->cc = NULL;
 	cloned->is_freestanding = args_other->is_freestanding;
@@ -127,7 +142,7 @@ CompilerArgs *compiler_args_clone(const CompilerArgs *args_other) {
 		cloned->field = calloc(arrlen((const char * const *)args_other->field)+1, sizeof(char*)); \
 		/* calloc 0-inits, so it is already null-terminated */ \
 		for (size_t i = 0; i < arrlen((const char * const *)args_other->field); ++i) { \
-			cloned->field[i] = strdup(args_other->field[i]); \
+			cloned->field[i] = ct_strdup(args_other->field[i]); \
 		}
     CLONE_FIELD(defines)
     CLONE_FIELD(include_dirs)
@@ -147,15 +162,8 @@ void compiler_args_free(CompilerArgs *c) {
 	free(c);
 }
 
-char *strdup_impl(const char *s) {
-	size_t len = strlen(s);
-	char *s_dup = malloc(len+1);
-	memcpy(s_dup, s, len+1);
-	return s_dup;
-}
-
 void compiler_args_set_cc(CompilerArgs *args, const char *cc) {
-	args->cc = strdup(cc);
+	args->cc = ct_strdup(cc);
 }
 #define ARG_LIST_APPEND_FN(field, fname) \
 void fname(CompilerArgs *args, const char *new_arg) { \
@@ -164,7 +172,7 @@ void fname(CompilerArgs *args, const char *new_arg) { \
 		++num_args; \
 	} \
 	args->field = realloc(args->field, (num_args+2)*sizeof(*args->field)); \
-	args->field[num_args] = strdup_impl(new_arg); \
+	args->field[num_args] = ct_strdup(new_arg); \
 	args->field[num_args+1] = NULL; \
 }
 ARG_LIST_APPEND_FN(defines, compiler_args_add_define)
@@ -477,7 +485,7 @@ int ctt_transpile_ct(const char *source_path, const char *target_path, const Com
 			goto defer_comptime;
 		}
 		// add source dir to #include "" directives
-		char *dir_of_source = strdup_impl(source_path);
+		char *dir_of_source = ct_strdup(source_path);
 		convert_dirname(dir_of_source);
 		compiler_args_add_include_dir(c_args_nonnull, dir_of_source);
 		free(dir_of_source);
@@ -560,6 +568,7 @@ char *ctt_transpile_str(const char *source_code, const CompilerArgs *args) {
 	ctime_node_free(root);
 	compiler_args_free(c_args_nonnull);
 	free(d_args);
+	arena_free(&lexer_arena);
 
 	buffer_free(comptime_code);
 	if (error_cancel) {
@@ -567,7 +576,6 @@ char *ctt_transpile_str(const char *source_code, const CompilerArgs *args) {
 		return NULL;
 	}
 	char *transpiled = buffer_to_cstr_move(target_code);
-	arena_free(&lexer_arena);
 	return transpiled;
 }
 
@@ -613,12 +621,5 @@ ctt_str ctt_include(const char *filename, CompilerArgs *args) {
 	} else {
 		ctt_error(ct_format("Transpilation of ctt_include \"%s\" failed", filename));
 	}
-}
-
-char *CT_NAME(strdup)(const char *s) {
-	const size_t len = strlen(s);
-	char *new_s = malloc(len+1);
-	memcpy(new_s, s, len+1);
-	return new_s;
 }
 

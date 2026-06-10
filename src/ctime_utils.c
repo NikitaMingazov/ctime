@@ -140,3 +140,10 @@ int CT_NAME(substr_count)(const char *s, const char *substr) {
 	return count;
 }
 
+char *CT_NAME(strdup)(const char *s) {
+	const size_t len = strlen(s);
+	char *new_s = malloc(len+1);
+	memcpy(new_s, s, len+1);
+	return new_s;
+}
+

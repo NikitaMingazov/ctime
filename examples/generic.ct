@@ -1,0 +1,4 @@
+
+#include <libctt.h>
+
+ctt_str define_with_methods(const char *sym, const char **methods);

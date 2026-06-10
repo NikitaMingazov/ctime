@@ -923,8 +923,6 @@ NOBDEF char *nob_win32_error_message(DWORD err);
 
 #endif // _WIN32
 
-#endif // NOB_H_
-
 #ifdef NOB_IMPLEMENTATION
 
 // This is like nob_proc_wait() but waits asynchronously. Depending on the platform ms means different thing.
@@ -2993,6 +2991,8 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define NANOS_PER_SEC NOB_NANOS_PER_SEC
     #endif // NOB_STRIP_PREFIX
 #endif // NOB_STRIP_PREFIX_GUARD_
+
+#endif // NOB_H_
 
 /*
    Revision history:

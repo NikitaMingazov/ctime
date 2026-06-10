@@ -1,4 +1,5 @@
 // CLI interface for the ctime transpiler
+#define _DEFAULT_SOURCE
 
 #define NOB_TEMP_CAPACITY 256
 #define NOB_NO_ECHO
@@ -6,11 +7,16 @@
 #define NOB_IMPLEMENTATION
 #include "../nob.h"
 
-#ifndef LOCAL_LIBCTT
+#if DYNAMIC_LIBCTT
 #include <libctt.h>
 #else
 #include "libctt.h"
 #endif
+
+#if ONE_SOURCE
+#include "libctt.c"
+#endif
+
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -57,7 +63,7 @@ static const char *msg =
 	if (in_path || stdin_as_source) { \
 		ERR("Only one source file is permitted") \
 	} \
-	compiler_args_add_include_dir(c_args, strdup(nob_temp_dir_name(argv[i]))); \
+	compiler_args_add_include_dir(c_args, ct_strdup(nob_temp_dir_name(argv[i]))); \
 	in_path = argv[i]; \
 	continue;
 
@@ -66,7 +72,7 @@ static const char *msg =
 	fprintf(stderr, msg, argv[0]); \
 	return 1;
 
-char *replace_extension(const char *path, const char *extension) {
+static char *replace_extension(const char *path, const char *extension) {
 	char *new_ext = strdup(path);
 	char *dot = strrchr(new_ext, '.');
 	if (dot)
@@ -195,8 +201,8 @@ int main(int argc, char **argv) {
 			compiler_args_add_lib_dir(c_args, libdir);
 			free(libdir);
 			nob_temp_rewind(mark);
-			// link comptime with libctt
 		}
+		// link comptime with libctt
 		compiler_args_add_lib_name(c_args, "ctt");
 	}
 	if (!in_path && !stdin_as_source) {
