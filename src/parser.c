@@ -76,7 +76,7 @@ static void quote_production(Lexer *lex, CTimeNode *quote) {
 				append_child(quote, new_block);
 				insert_production(lex, new_block);
 				break;
-			case TOKEN_COMPARGS_REF: // TODO: figure out if this is correct
+			case TOKEN_COMPARGS_REF: // I wonder if $$ as a token is a good idea
 				append_child(quote, new_node(N_SOURCE_CODE, "__CC_ARGS__", tok.row, tok.col));
 				break;
 			case TOKEN_QUOTE_END:

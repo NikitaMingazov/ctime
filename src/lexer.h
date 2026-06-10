@@ -14,7 +14,7 @@
 typedef enum {
 	TOKEN_NONE, // option<token>
 	TOKEN_STRING,
-	TOKEN_QUOTE_START, // TODO: make quotes run after preprocessor
+	TOKEN_QUOTE_START,
 	TOKEN_QUOTE_END,
 	TOKEN_CTIMEDEF_START,
 	TOKEN_CTIMEDEF_END,

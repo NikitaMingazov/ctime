@@ -23,9 +23,6 @@
 #include <string.h>
 #include <stdint.h>
 
-/* TODO: in addition to -d, have a -g that produces layer N as a compilable .c with original line origins instead of live insertions, a build script using ctt with accompanying layerN_artifacts/layer_[0..N-1).{h,c}
-   and the target program with .ct lines in the source? */
-
 static const char *msg =
 " usage: %s <in_file> [OPTIONS]\n"
 " options:\n"
