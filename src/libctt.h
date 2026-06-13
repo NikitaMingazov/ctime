@@ -48,7 +48,8 @@ DebuggingArgs *debugging_args_init();
 
 // Transpiles a .ct into a .c, writing it to target_path (for CLI)
 // if source or target are NULL, stdin/stdout are used, respectively
-// args can be NULL, if so, source_path's dir is added as an include dir
+// c_args can be NULL, if so, source_path's dir is added as an include dir
+// d_args can be NULL, if so, source_path's dir is added as an include dir
 // nonzero return on error
 int ctt_transpile_ct(const char *source_path, const char *target_path, const CompilerArgs *c_args, const DebuggingArgs *d_args);
 
@@ -105,6 +106,25 @@ ctt_str ctt_include(const char *source_path, CompilerArgs *args);
 #define CT_CONCAT(a, b) a ## b
 #define CT_CONCAT_EXPAND(a, b) CT_CONCAT(a, b)  // forces expansion of arguments
 #define CT_NAME(name) CT_CONCAT_EXPAND(CTIME_PREFIX, name)
+
+/*
+// TODO:
+// an arena allocator for function-scoped lifetimes
+#ifdef CT_MANAGED_MEMORY
+static Arena *ct_arena;
+static bool ct_arena_init = false;
+void *CT_NAME(arena_alloc)(size_t len) {
+	if (!ct_arena_init) {
+		ct_arena_init = true;
+		ct_arena = malloc(sizeof(*ct_arena));
+		memset(ct_arena, 0, sizeof(*ct_arena));
+	}
+	return arena_alloc(ct_arena, len);
+}
+size_t CT_NAME(arena_mark)(Arena *ct_arena);
+void CT_NAME(arena_reset)(Arena *ct_arena, size_t mark);
+#endif
+*/
 
 // returns a string that when printed, is identical to itself as source code minus the ""
 char *CT_NAME(quote)(const char *s);

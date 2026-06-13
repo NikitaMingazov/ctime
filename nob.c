@@ -58,11 +58,11 @@ const char *lib_o_targets[] = { LIB_O_TARGETS NULL };
 const char *help =
 "usage: %s [OPTIONS]\n"
 "options:\n"
-" split_source     use multiple compilation units instead of unity build\n"
-" no_install       only build into ./build/ without installing to /usr\n"
+" split-source     use multiple compilation units instead of unity build\n"
+" no-install       only build into ./build/ without installing to /usr\n"
 " clean            instead of building, remove build targets\n"
-" dynamic_libctt   dynamically link libctt in ctt\n"
-" build_static     build libctt.a\n"
+" dynamic-libctt   dynamically link libctt in ctt\n"
+" build-static     build libctt.a\n"
 " -h               print this message\n"
 ;
 
@@ -80,13 +80,13 @@ int main(int argc, char **argv)
 		if (strcmp(argv[i], "-h") == 0) {
 			printf(help, argv[0]);
 			return 0;
-		} else if (strcmp(argv[i], "build_static") == 0)
+		} else if (strcmp(argv[i], "build-static") == 0)
 			build_static = true;
-		else if (strcmp(argv[i], "dynamic_libctt") == 0)
+		else if (strcmp(argv[i], "dynamic-libctt") == 0)
 			dynamic_libctt = true;
-		else if (strcmp(argv[i], "no_install") == 0)
+		else if (strcmp(argv[i], "no-install") == 0)
 			no_install = true;
-		else if (strcmp(argv[i], "split_source") == 0)
+		else if (strcmp(argv[i], "split-source") == 0)
 			split_source = true;
 		else if (strcmp(argv[i], "clean") == 0)
 			clean = true;
