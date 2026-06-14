@@ -4,7 +4,6 @@
 #define NOB_TEMP_CAPACITY 256
 #define NOB_NO_ECHO
 #define _POSIX_C_SOURCE 200809L
-#define NOB_IMPLEMENTATION
 #include "../nob.h"
 
 #if DYNAMIC_LIBCTT

@@ -8,6 +8,9 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
+#define NOB_IMPLEMENTATION
+#include "../nob.h"
+
 #define ARENA_IMPLEMENTATION
 #include "arena.h"
 

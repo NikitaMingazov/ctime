@@ -152,7 +152,7 @@ int main(int argc, char **argv)
 	// installing to /usr
 	if (!no_install) {
 		if (build_static) {
-			if (!nob_copy_file(LIB_TARGET_H, SYSTEM_HEADER_DIR "lib"LIB_NAME".a")) {
+			if (!nob_copy_file(LIB_TARGET_A, SYSTEM_LIB_DIR "lib"LIB_NAME".a")) {
 				fprintf(stderr, "Could not install libctt.a, are you sure this was run as root?\n");
 				return 1;
 			}
