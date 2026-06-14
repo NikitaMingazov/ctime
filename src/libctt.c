@@ -370,6 +370,12 @@ static char *resolve_quote_node(const CTimeNode *quote_node, Buffer *compilable_
 				buffer_append_cstr(inner, s);
 				free(s);
 				break;
+			case N_QUOTE:
+				s = resolve_quote_node(cur, compilable_code, args);
+				if (!s) return NULL;
+				buffer_append_cstr(inner, s);
+				free(s);
+				break;
 			default: exit(1);
 		}
 	}
@@ -495,7 +501,7 @@ int ctt_transpile_ct(const char *source_path, const char *target_path, const Com
 	}
 
 	Lexer *lex = lexer_new(in_stream, d_args->tab_width, d_args->print_tokens, &lexer_arena);
-	CTimeNode *root = parse_into_tree(lex);
+	CTimeNode *root = parse_into_tree(lex, d_args_nonnull);
 
 	if (d_args_nonnull->print_ast) {
 		ctime_print_tree(root);
@@ -559,7 +565,7 @@ char *ctt_transpile_str(const char *source_code, const CompilerArgs *args) {
 
 
 	Lexer *lex = lexer_new(in_stream, d_args->tab_width, d_args->print_tokens, &lexer_arena);
-	CTimeNode *root = parse_into_tree(lex);
+	CTimeNode *root = parse_into_tree(lex, d_args);
 	fclose(in_stream);
 
 	Buffer *comptime_code = buffer_new();

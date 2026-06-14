@@ -9,13 +9,14 @@
 #include <stdbool.h>
 
 char *token_to_str(Token tok) {
-	// return ct_format("%s (%d:%d)", TOKENTYPE_TO_STR[tok.type], tok.row, tok.col);
-	return ct_format("%s (%d:%d): [\n%s\n]", TOKENTYPE_TO_STR[tok.type], tok.row, tok.col, tok.string_data);
+	return ct_format("%s (%d:%d)", TOKENTYPE_TO_STR[tok.type], tok.row, tok.col);
+	// return ct_format("%s (%d:%d): [\n%s\n]", TOKENTYPE_TO_STR[tok.type], tok.row, tok.col, tok.string_data);
 }
 
 int k = 0; // for debugging
 Token token_new(TokenType type, char *data, unsigned row, unsigned col, bool debug) {
-	if (debug && type != TOKEN_NONE)
+	// tcc reads from unrelated memory on NULL inside EOF token
+	if (debug && type != TOKEN_NONE && type != TOKEN_EOF)
 		fprintf(stderr, "%d: %s\n", k++, token_to_str((Token) { .type = type, .string_data = data, .row = row, .col = col }));
 	return (Token) { .type = type, .string_data = data, .row = row, .col = col };
 }

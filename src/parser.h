@@ -2,6 +2,7 @@
 #define PARSER_H
 
 #include "lexer.h"
+#include "libctt.h"
 #include <stddef.h>
 
 typedef enum node_type {
@@ -25,7 +26,7 @@ typedef struct ctime_node {
 	size_t num_children;
 } CTimeNode;
 
-CTimeNode *parse_into_tree(Lexer *lex);
+CTimeNode *parse_into_tree(Lexer *lex, DebuggingArgs *d_args);
 
 void ctime_node_free(CTimeNode *n);
 void ctime_print_tree(CTimeNode *n);

@@ -1,5 +1,6 @@
 #include "parser.h"
 #include "lexer.h"
+#include "libctt.h"
 #include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -38,7 +39,7 @@ Token match(Lexer *lex, TokenType expected) {
 	return t;
 }
 
-static void insert_production(Lexer *lex, CTimeNode *insert) {
+static void insert_production(Lexer *lex, CTimeNode *insert, DebuggingArgs *d_args) {
 	Token tok;
 	CTimeNode *new_block;
 	while ((tok = lexer_next(lex)).type != TOKEN_EOF) {
@@ -49,7 +50,7 @@ static void insert_production(Lexer *lex, CTimeNode *insert) {
 			case TOKEN_INSERTION_START:
 				new_block = new_node(N_INSERT, NULL, tok.row, tok.col);
 				append_child(insert, new_block);
-				insert_production(lex, new_block);
+				insert_production(lex, new_block, d_args);
 				break;
 			case TOKEN_COMPARGS_REF:
 				append_child(insert, new_node(N_SOURCE_CODE, "__CC_ARGS__", tok.row, tok.col));
@@ -57,13 +58,13 @@ static void insert_production(Lexer *lex, CTimeNode *insert) {
 			case TOKEN_INSERTION_END:
 				return;
 			default:
-				fprintf(stderr, "Syntax error (%d:%d)\n", tok.row, tok.col);
-				exit(1);
+				fprintf(stderr, "Syntax error (%d:%d), saw token %s\n", tok.row, tok.col, TOKENTYPE_TO_STR[tok.type]);
+				if (!d_args->print_tokens) exit(1);
 		}
 	}
 }
 
-static void quote_production(Lexer *lex, CTimeNode *quote) {
+static void quote_production(Lexer *lex, CTimeNode *quote, DebuggingArgs *d_args) {
 	Token tok;
 	CTimeNode *new_block;
 	while ((tok = lexer_next(lex)).type != TOKEN_EOF) {
@@ -74,21 +75,26 @@ static void quote_production(Lexer *lex, CTimeNode *quote) {
 			case TOKEN_INSERTION_START:
 				new_block = new_node(N_INSERT, NULL, tok.row, tok.col);
 				append_child(quote, new_block);
-				insert_production(lex, new_block);
+				insert_production(lex, new_block, d_args);
 				break;
 			case TOKEN_COMPARGS_REF: // I wonder if $$ as a token is a good idea
 				append_child(quote, new_node(N_SOURCE_CODE, "__CC_ARGS__", tok.row, tok.col));
 				break;
+			case TOKEN_QUOTE_START:
+				new_block = new_node(N_QUOTE, NULL, tok.row, tok.col);
+				append_child(quote, new_block);
+				quote_production(lex, new_block, d_args);
+				break;
 			case TOKEN_QUOTE_END:
 				return;
 			default:
-				fprintf(stderr, "Syntax error (%d:%d)\n", tok.row, tok.col);
-				exit(1);
+				fprintf(stderr, "Syntax error (%d:%d), saw token %s\n", tok.row, tok.col, TOKENTYPE_TO_STR[tok.type]);
+				if (!d_args->print_tokens) exit(1);
 		}
 	}
 }
 
-static void comptime_production(Lexer *lex, CTimeNode *comptime) {
+static void comptime_production(Lexer *lex, CTimeNode *comptime, DebuggingArgs *d_args) {
 	Token tok;
 	CTimeNode *new_block;
 	while ((tok = lexer_next(lex)).type != TOKEN_EOF) {
@@ -99,12 +105,12 @@ static void comptime_production(Lexer *lex, CTimeNode *comptime) {
 			case TOKEN_INSERTION_START:
 				new_block = new_node(N_INSERT, NULL, tok.row, tok.col);
 				append_child(comptime, new_block);
-				insert_production(lex, new_block);
+				insert_production(lex, new_block, d_args);
 				break;
 			case TOKEN_QUOTE_START:
 				new_block = new_node(N_QUOTE, NULL, tok.row, tok.col);
 				append_child(comptime, new_block);
-				quote_production(lex, new_block);
+				quote_production(lex, new_block, d_args);
 				break;
 			case TOKEN_COMPARGS_REF:
 				append_child(comptime, new_node(N_SOURCE_CODE, "__CC_ARGS__", tok.row, tok.col));
@@ -112,13 +118,13 @@ static void comptime_production(Lexer *lex, CTimeNode *comptime) {
 			case TOKEN_CTIMEDEF_END:
 				return;
 			default:
-				fprintf(stderr, "Syntax error (%d:%d)\n", tok.row, tok.col);
-				exit(1);
+				fprintf(stderr, "Syntax error (%d:%d), saw token %s\n", tok.row, tok.col, TOKENTYPE_TO_STR[tok.type]);
+				if (!d_args->print_tokens) exit(1);
 		}
 	}
 }
 
-CTimeNode *parse_into_tree(Lexer *lex) {
+CTimeNode *parse_into_tree(Lexer *lex, DebuggingArgs *d_args) {
 	CTimeNode *root = new_node(N_ROOT, NULL, 0, 0);
 
 	CTimeNode *comptime_block;
@@ -132,16 +138,19 @@ CTimeNode *parse_into_tree(Lexer *lex) {
 			case TOKEN_CTIMEDEF_START:
 				comptime_block = new_node(N_COMPTIME, NULL, tok.row, tok.col);
 				append_child(root, comptime_block);
-				comptime_production(lex, comptime_block);
+				comptime_production(lex, comptime_block, d_args);
 				break;
 			case TOKEN_INSERTION_START:
 				insert_block = new_node(N_INSERT, NULL, tok.row, tok.col);
 				append_child(root, insert_block);
-				insert_production(lex, insert_block);
+				insert_production(lex, insert_block, d_args);
 				break;
 			default:
-				fprintf(stderr, "Syntax error (%d:%d)\n", tok.row, tok.col);
-				exit(1);
+				fprintf(stderr, "Syntax error (%d:%d), saw token %s\n", tok.row, tok.col, TOKENTYPE_TO_STR[tok.type]);
+				if (!d_args->print_tokens) {
+					ctime_node_free(root);
+					return NULL;
+				}
 		}
 	}
 	return root;
@@ -157,13 +166,18 @@ void ctime_node_free(CTimeNode *n) {
 }
 
 static void print_tree_inner(CTimeNode *n, unsigned level) {
-	const char *indent = "  ";
+	const char *indent = " . ";
 	char *prefix = malloc(level*strlen(indent)+1);
 	for (size_t i = 0; i < level; ++i) {
 		memcpy(prefix+i*strlen(indent), indent, strlen(indent));
 	}
 	prefix[level*strlen(indent)] = '\0';
-	fprintf(stderr, "%s%s (%d:%d) %.0s\n", prefix, NODE_TYPE_STR[n->type], n->row, n->col, n->code);
+	char *node_val = n->code ?
+		ct_format("\"%s\"", ct_quote(n->code))
+		: ct_strdup("");
+	const char *cont_dots = strlen(node_val) >= 41 ? "..." : "";
+	fprintf(stderr, "%s%s (%d:%d) %.40s%s\n", prefix, NODE_TYPE_STR[n->type], n->row, n->col, node_val, cont_dots);
+	free(node_val);
 	free(prefix);
 	for (size_t i = 0; i < n->num_children; ++i) {
 		print_tree_inner(n->children[i], level+1);

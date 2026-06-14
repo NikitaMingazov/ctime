@@ -442,18 +442,7 @@ ctt_str export_default_derivations() {
 		}'
 	);
 
-	char *default_derivs_len = ct_format("%zu", default_derivations->num_elements);
-	char *default_derivs_cap = ct_format("%zu", default_derivations->capacity);
-	char *default_derivs_table = $( hm_serialise_table("const char*", "const char*") )$ (default_derivations);
-	const char *definition_quote = '{
-	const $( hm_node("const char*", "const char*") )$ default_derivs_table[] = %s;
-	const $( hm("const char*", "const char*") )$ default_derivations = ( $( hm("const char*", "const char*") )$ ) {
-		.num_elements = %s,
-		.capacity = %s,
-		.table = default_derivs_table
-	};
-	}' ;
-	ctt_return(ct_format(definition_quote, default_derivs_table, default_derivs_len, default_derivs_cap));
+	ctt_return( $( hm_serialise("const char*", "const char*") )$ (default_derivations, "default_derivations") );
 }
 }#
 
