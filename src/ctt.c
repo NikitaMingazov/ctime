@@ -2,7 +2,6 @@
 #define _DEFAULT_SOURCE
 
 #define NOB_TEMP_CAPACITY 256
-#define NOB_NO_ECHO
 #define _POSIX_C_SOURCE 200809L
 #include "../nob.h"
 

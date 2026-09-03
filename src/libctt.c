@@ -9,6 +9,7 @@
 #endif
 
 #define NOB_IMPLEMENTATION
+#define NOB_NO_ECHO
 #include "../nob.h"
 
 #define ARENA_IMPLEMENTATION
@@ -17,6 +18,7 @@
 #include <assert.h>
 #include <libgen.h>
 
+// TODO: this is dumb, this is libctt.c, <libctt.h> doesn't exist yet, remove this
 #if DYNAMIC_LIBCTT
 #include <libctt.h>
 #else
@@ -45,9 +47,9 @@
 #ifdef __unix__
 #define UNIX_SEGFAULT_GUARD
 #define HAVE_SEGFAULT_GUARD
-#include <unistd.h>
-#include <signal.h>
-#include <sys/wait.h>
+#include <unistd.h> // 8 symbols ...
+#include <signal.h> // SIGSEGV
+#include <sys/wait.h> // waitpid
 #endif // ifdef __unix__
 
 // length of null-terminated array
