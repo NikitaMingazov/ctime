@@ -198,7 +198,7 @@ DebuggingArgs *debugging_args_init() {
 
 #ifdef UNIX_SEGFAULT_GUARD
 // forks a new process to call the comptime function from, to catch segfaults
-// as a side effect, it also cleans up memory
+// as a side effect, it also cleans up memory so you don't need to call free
 static char* segfault_safe_call(char *(*unsafe_fn)(void)) {
 	int pipefd[2];
 	if (pipe(pipefd) == -1) {
@@ -417,10 +417,10 @@ static char *resolve_comptime_node(const CTimeNode *comptime, Buffer *comptime_c
 }
 
 // buffers are in/out args
-// but only in content should be the args header in comptime
+// but the only in content should be the args header in comptime
 static bool transpile_ast_into_buffers(Buffer *target_code, Buffer *comptime_code, CTimeNode *root, CompilerArgs *c_args_nonnull, DebuggingArgs *d_args_nonnull) {
 	char *s;
-	bool error = false;
+	bool is_error = false;
 	terminated = false;
 	num_insertions = 0;
 	max_insertions = d_args_nonnull->transpile_n_layers;
@@ -435,7 +435,7 @@ static bool transpile_ast_into_buffers(Buffer *target_code, Buffer *comptime_cod
 				if (terminated)
 					goto done;
 				if (!s) {
-					error = true;
+					is_error = true;
 					goto done;
 				}
 				buffer_append_cstr(comptime_code, s);
@@ -446,7 +446,7 @@ static bool transpile_ast_into_buffers(Buffer *target_code, Buffer *comptime_cod
 				if (terminated)
 					goto done;
 				if (!s) {
-					error = true;
+					is_error = true;
 					goto done;
 				}
 				buffer_append_cstr(target_code, s);
@@ -456,7 +456,7 @@ static bool transpile_ast_into_buffers(Buffer *target_code, Buffer *comptime_cod
 		}
 	}
 done:
-	return error;
+	return is_error;
 }
 
 int ctt_transpile_ct(const char *source_path, const char *target_path, const CompilerArgs *c_args, const DebuggingArgs *d_args) {
@@ -517,7 +517,7 @@ int ctt_transpile_ct(const char *source_path, const char *target_path, const Com
 		status = 1;
 		goto defer_target_buffer;
 	}
-	FILE *out_stream = stdout;
+	FILE *out_stream;
 	if (target_path) {
 		out_stream = fopen(target_path, "w");
 		if (!out_stream) {
@@ -525,6 +525,8 @@ int ctt_transpile_ct(const char *source_path, const char *target_path, const Com
 			status = 1;
 			goto defer_target_buffer;
 		}
+	} else {
+		out_stream = stdout;
 	}
 	if (terminated) { // global variable for non-error early return
 		buffer_null_terminate(comptime_code);
@@ -562,7 +564,6 @@ char *ctt_transpile_str(const char *source_code, const CompilerArgs *args) {
 		c_args_nonnull = compiler_args_init();
 	FILE* in_stream = fmemopen((void*)source_code, strlen(source_code), "r");
 	DebuggingArgs *d_args = debugging_args_init();
-
 
 	Lexer *lex = lexer_new(in_stream, d_args->tab_width, d_args->print_tokens, &lexer_arena);
 	CTimeNode *root = parse_into_tree(lex, d_args);
@@ -607,13 +608,15 @@ static char *read_file(const char *path) {
 
 ctt_str ctt_include(const char *filename, CompilerArgs *args) {
 	char *source_code = NULL;
+	// search for the file in the included directories
 	for (size_t i = 0; args->include_dirs[i]; ++i) {
-		char *source_path = malloc(strlen(args->include_dirs[i])+1+strlen(filename)+1);
+		char *source_path = malloc(strlen(args->include_dirs[i]) + 1 + strlen(filename) + 1);
 		*source_path = '\0';
 		strcat(source_path, args->include_dirs[i]);
 		strcat(source_path, "/");
 		strcat(source_path, filename);
 		if (access(source_path, F_OK) == 0) {
+			// file found
 			source_code = read_file(source_path);
 			free(source_path);
 			break;

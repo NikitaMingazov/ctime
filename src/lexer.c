@@ -111,11 +111,6 @@ void lexer_free(Lexer *lex) {
 		lex->prev_col = lex->cur_col; \
 		return new_token; \
 	} \
-	/* remove preceding newline for comptime blocks */ \
-	if (TYPE == TOKEN_CTIMEDEF_START) { \
-		if (lex->buffer->len > 0 && lex->buffer->data[lex->buffer->len-1] == '\n') \
-			buffer_pop_end(lex->buffer); \
-	} \
 	/* copy out the string in the buffer */ \
 	buffer_null_terminate(lex->buffer); \
 	s = arena_alloc(lex->str_lifetime, lex->buffer->len); \
