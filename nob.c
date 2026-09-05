@@ -58,12 +58,12 @@ const char *lib_o_targets[] = { LIB_O_TARGETS NULL };
 const char *help =
 "usage: %s [OPTIONS]\n"
 "options:\n"
+" install          install built library to /usr\n"
 " split-source     use multiple compilation units instead of unity build\n"
-" no-install       only build into ./build/ without installing to /usr\n"
 " clean            instead of building, remove build targets\n"
-" dynamic-libctt   dynamically link libctt in ctt\n"
+" dynamic-libctt   dynamically link libctt in ctt executable\n"
 " build-static     build libctt.a\n"
-" -h               print this message\n"
+" -h | help        print this message\n"
 ;
 
 int main(int argc, char **argv)
@@ -71,21 +71,22 @@ int main(int argc, char **argv)
 	NOB_GO_REBUILD_URSELF(argc, argv);
 	if (nob_file_exists("./nob.old"))
 		nob_delete_file("./nob.old");
+	int status = 0;
 	bool split_source = false;
-	bool no_install = false;
+	bool install = false;
 	bool clean = false;
 	bool dynamic_libctt = false;
 	bool build_static = false;
 	for (size_t i = 1; argv[i]; ++i) {
-		if (strcmp(argv[i], "-h") == 0) {
+		if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "help") == 0) {
 			printf(help, argv[0]);
 			return 0;
 		} else if (strcmp(argv[i], "build-static") == 0)
 			build_static = true;
 		else if (strcmp(argv[i], "dynamic-libctt") == 0)
 			dynamic_libctt = true;
-		else if (strcmp(argv[i], "no-install") == 0)
-			no_install = true;
+		else if (strcmp(argv[i], "install") == 0)
+			install = true;
 		else if (strcmp(argv[i], "split-source") == 0)
 			split_source = true;
 		else if (strcmp(argv[i], "clean") == 0)
@@ -93,7 +94,7 @@ int main(int argc, char **argv)
 		else {
 			printf("%s: invalid argument: %s\n", argv[0], argv[i]);
 			printf(help, argv[0]);
-			return 0;
+			return 1;
 		}
 	}
 	if (dynamic_libctt)
@@ -150,20 +151,23 @@ int main(int argc, char **argv)
 	// copy libctt.h to be adjacent to libctt.so
 	if (!nob_copy_file(LIB_SOURCE_H, LIB_TARGET_H)) return 1;
 	// installing to /usr
-	if (!no_install) {
+	if (install) {
 		if (build_static) {
 			if (!nob_copy_file(LIB_TARGET_A, SYSTEM_LIB_DIR "lib"LIB_NAME".a")) {
 				fprintf(stderr, "Could not install libctt.a, are you sure this was run as root?\n");
-				return 1;
+				status = 1;
+				goto remove_objects;
 			}
 		}
 		if (!nob_copy_file(LIB_TARGET_H, SYSTEM_HEADER_DIR "lib"LIB_NAME".h")) {
 			fprintf(stderr, "Could not install libctt.h, are you sure this was run as root?\n");
-			return 1;
+			status = 1;
+			goto remove_objects;
 		}
 		if (!nob_copy_file(LIB_TARGET_SO, SYSTEM_LIB_DIR "lib"LIB_NAME".so")) {
 			fprintf(stderr, "Could not install libctt.so, are you sure this was run as root?\n");
-			return 1;
+			status = 1;
+			goto remove_objects;
 		}
 	}
 	// building ctt
@@ -175,16 +179,18 @@ int main(int argc, char **argv)
 	// 	nob_cmd_append(&cmd, CC, CFLAGS, WARNFLAGS, "-o", BIN_TARGET, BIN_SRC, LIB_TARGET_A, LDFLAGS);
 	// }
 	if (!nob_cmd_run(&cmd)) return 1;
-	if (!no_install) {
+	if (install) {
 		if (!nob_copy_file(BIN_TARGET, SYSTEM_BIN_DIR "ctt")) {
 			fprintf(stderr, "Could not install ctt, are you sure this was run as root?\n");
-			return 1;
+			status = 1;
+			goto remove_objects;
 		}
 	}
+remove_objects:
 	for (size_t i = 0; lib_o_targets[i]; ++i) {
 		if (nob_file_exists(lib_o_targets[i]))
 			nob_delete_file(lib_o_targets[i]);
 	}
-	return 0;
+	return status;
 }
 
