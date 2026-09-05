@@ -158,17 +158,23 @@ int main(int argc, char **argv)
 				status = 1;
 				goto remove_objects;
 			}
+			nob_cmd_append(&cmd, "chmod", "644", SYSTEM_LIB_DIR "lib"LIB_NAME".a");
+			if (!nob_cmd_run(&cmd)) return 1;
 		}
 		if (!nob_copy_file(LIB_TARGET_H, SYSTEM_HEADER_DIR "lib"LIB_NAME".h")) {
 			fprintf(stderr, "Could not install libctt.h, are you sure this was run as root?\n");
 			status = 1;
 			goto remove_objects;
 		}
+		nob_cmd_append(&cmd, "chmod", "644", SYSTEM_HEADER_DIR "lib"LIB_NAME".h");
+		if (!nob_cmd_run(&cmd)) return 1;
 		if (!nob_copy_file(LIB_TARGET_SO, SYSTEM_LIB_DIR "lib"LIB_NAME".so")) {
 			fprintf(stderr, "Could not install libctt.so, are you sure this was run as root?\n");
 			status = 1;
 			goto remove_objects;
 		}
+		nob_cmd_append(&cmd, "chmod", "644", SYSTEM_LIB_DIR "lib"LIB_NAME".so");
+		if (!nob_cmd_run(&cmd)) return 1;
 	}
 	// building ctt
 	if (split_source)
@@ -185,6 +191,8 @@ int main(int argc, char **argv)
 			status = 1;
 			goto remove_objects;
 		}
+		nob_cmd_append(&cmd, "chmod", "644", SYSTEM_BIN_DIR "ctt");
+		if (!nob_cmd_run(&cmd)) return 1;
 	}
 remove_objects:
 	for (size_t i = 0; lib_o_targets[i]; ++i) {
