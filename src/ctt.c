@@ -33,6 +33,7 @@ static const char *msg =
 "   -I <dir>        also search <dir> for .h files\n"
 "   -L <dir>        also search <dir> for .so files\n"
 "   -l<name>        include lib<name>.so in linking\n"
+"   -B <dir>        search <dir> for libtcc libraries and headers\n"
 "   -D <def>        pass #define <def> to the comptime preprocessor\n"
 "                     ('-D primus=2' corresponds to #define primus 2)\n"
 "   -A              print ctime AST to stdout and cancel transpilation\n"
@@ -114,6 +115,7 @@ int main(int argc, char **argv) {
 			SOURCE_ARG
 		} else {
 			if (!argv[i][1]) { // '-'
+				// duplicate '-' is ignored rather than error
 				stdin_as_source = true;
 				continue;
 			}
@@ -157,20 +159,22 @@ int main(int argc, char **argv) {
 						c_args->cc = argv[i];
 					}
 					break;
-				#define DO(ARG) compiler_args_add_include_dir(c_args, ARG)
+				#define DO(PARAM) compiler_args_add_include_dir(c_args, PARAM)
 				CASE_CHAR_WITH_PARAMETER('I', "I")
-				#define DO(ARG) compiler_args_add_lib_dir(c_args, ARG)
+				#define DO(PARAM) compiler_args_add_lib_dir(c_args, PARAM)
 				CASE_CHAR_WITH_PARAMETER('L', "L")
-				#define DO(ARG) compiler_args_add_lib_name(c_args, ARG)
+				#define DO(PARAM) compiler_args_add_lib_name(c_args, PARAM)
 				CASE_CHAR_WITH_PARAMETER('l', "l")
-				#define DO(ARG) compiler_args_add_define(c_args, ARG)
+				#define DO(PARAM) compiler_args_add_define(c_args, PARAM)
 				CASE_CHAR_WITH_PARAMETER('D', "D")
-				#define DO(ARG) compiler_args_add_shell_cc_arg(c_args, ARG)
+				#define DO(PARAM) compiler_args_add_shell_cc_arg(c_args, PARAM)
 				CASE_CHAR_WITH_PARAMETER('a', "a")
 				// duplicate of these should be error?
-				#define DO(ARG) d_args->transpile_n_layers = atoi(ARG)
+				#define DO(PARAM) compiler_args_set_lib(c_args, PARAM)
+				CASE_CHAR_WITH_PARAMETER('B', "B")
+				#define DO(PARAM) d_args->transpile_n_layers = atoi(PARAM)
 				CASE_CHAR_WITH_PARAMETER('N', "N")
-				#define DO(ARG) d_args->tab_width = atoi(ARG)
+				#define DO(PARAM) d_args->tab_width = atoi(PARAM)
 				CASE_CHAR_WITH_PARAMETER('w', "w")
 				case '-':
 					if (!argv[i][2]) {

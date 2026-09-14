@@ -90,6 +90,7 @@ static ComptimeBackend *comptime_tcc_compile(const char *source_code, CompilerAr
 	const char **lib_dirs = args->lib_dirs;
 	const char **lib_names = args->lib_names;
 	const char **defines = args->defines;
+	const char *sys_path = args->sys_path ? args->sys_path : "/usr/lib/tcc";
 	TCCState *s = tcc_new();
 	if (!s) {
 		fprintf(stderr, "Failed to create TCC state\n");
@@ -98,6 +99,14 @@ static ComptimeBackend *comptime_tcc_compile(const char *source_code, CompilerAr
 	if (tcc_set_output_type(s, TCC_OUTPUT_MEMORY)) {
 		fprintf(stderr, "Failed to set output type\n");
 		goto cleanup;
+	}
+	// after some update, libtcc could not find its own libs, so -B does this as a backup
+	if (sys_path) {
+		// tcc_set_lib_path(s, "/usr/lib/tcc"); // does nothing
+		tcc_add_library_path(s, sys_path);
+		char *include = ct_format("%s/include", sys_path);
+		tcc_add_sysinclude_path(s, include);
+		free(include);
 	}
 	// doesn't work
 	// tcc_set_options(s, "-Wall -Werror=implicit-function-declaration");

@@ -17,6 +17,7 @@ typedef struct compiler_args {
 	const char **lib_dirs;
 	const char **lib_names;
 	const char **defines;
+	const char *sys_path;
 	// arbitrary args (for non-null cc)
 	const char **cc_args;
 	// whether this header is to be imported
@@ -35,6 +36,8 @@ void compiler_args_add_define(CompilerArgs *args, const char *define);
 void compiler_args_add_lib_dir(CompilerArgs *args, const char *lib_dir);
 void compiler_args_add_lib_name(CompilerArgs *args, const char *lib_name);
 void compiler_args_add_shell_cc_arg(CompilerArgs *args, const char *cc_arg);
+// for libtcc internal libs
+void compiler_args_set_lib(CompilerArgs *args, const char *lib);
 
 typedef struct dubugging_args {
 	size_t transpile_n_layers; // default: SIZE_MAX

@@ -96,6 +96,7 @@ CompilerArgs *compiler_args_init() {
 	*args->lib_names = NULL;
 	args->cc_args = malloc(sizeof(char**));
 	*args->cc_args = NULL;
+	args->sys_path = NULL;
 	args->cc = NULL;
 	args->is_freestanding = false;
 	return args;
@@ -138,11 +139,15 @@ static char *compiler_args_serialise(const CompilerArgs *args) {
 
 CompilerArgs *compiler_args_clone(const CompilerArgs *args_other) {
 	CompilerArgs *cloned = malloc(sizeof(*cloned));
+	cloned->is_freestanding = args_other->is_freestanding;
 	if (args_other->cc)
 		cloned->cc = ct_strdup(args_other->cc);
 	else
 	 	cloned->cc = NULL;
-	cloned->is_freestanding = args_other->is_freestanding;
+	if (args_other->sys_path)
+		cloned->sys_path = ct_strdup(args_other->sys_path);
+	else
+	 	cloned->sys_path = NULL;
 	#define CLONE_FIELD(field) \
 		cloned->field = calloc(arrlen((const char * const *)args_other->field)+1, sizeof(char*)); \
 		/* calloc 0-inits, so it is already null-terminated */ \
@@ -186,6 +191,10 @@ ARG_LIST_APPEND_FN(lib_dirs, compiler_args_add_lib_dir)
 ARG_LIST_APPEND_FN(lib_names, compiler_args_add_lib_name)
 ARG_LIST_APPEND_FN(cc_args, compiler_args_add_shell_cc_arg)
 #undef ARG_LIST_APPEND_FN
+
+void compiler_args_set_lib(CompilerArgs *args, const char *lib) {
+	args->sys_path = lib;
+}
 
 DebuggingArgs *debugging_args_init() {
 	DebuggingArgs *args = malloc(sizeof(*args));
