@@ -1,15 +1,16 @@
 // CLI interface for the ctime transpiler
 #define _DEFAULT_SOURCE
 
-#define NOB_TEMP_CAPACITY 256
-#define _POSIX_C_SOURCE 200809L
-#include "../nob.h"
-
 #if DYNAMIC_LIBCTT
 #include <libctt.h>
 #else
 #include "libctt.h"
 #endif
+
+#define NOB_IMPLEMENTATION
+#define NOB_TEMP_CAPACITY 256
+#define _POSIX_C_SOURCE 200809L
+#include "../nob.h"
 
 #if ONE_SOURCE
 #include "libctt.c"

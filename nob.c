@@ -21,7 +21,7 @@
 #define SYSTEM_BIN_DIR "/usr/bin/"
 #endif // ifdef __unix__
 
-#define LDFLAGS "-lctt", "-ltcc"
+#define LDFLAGS "-ltcc"
 #define BUILD_DIR "build/"
 #define SRC_DIR "src/"
 

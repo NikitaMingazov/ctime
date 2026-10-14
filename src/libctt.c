@@ -8,6 +8,7 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
+#define NOB_TEMP_CAPACITY 256
 #define NOB_IMPLEMENTATION
 #define NOB_NO_ECHO
 #include "../nob.h"
@@ -18,12 +19,7 @@
 #include <assert.h>
 #include <libgen.h>
 
-// TODO: this is dumb, this is libctt.c, <libctt.h> doesn't exist yet, remove this
-#if DYNAMIC_LIBCTT
-#include <libctt.h>
-#else
 #include "libctt.h"
-#endif
 
 #include "comptime-backend.h"
 #include "buffer.h"
@@ -302,6 +298,7 @@ size_t max_insertions;
 bool terminated;
 // TODO: make the parser an iterator to print raw source post termination
 
+// TODO: make a stack of inserts, backtrack and resolve them all at once, rather than recompile for each
 static char *resolve_insert_node(const CTimeNode *insert, Buffer *comptime_code, CompilerArgs *args) {
 	Buffer *inner = buffer_new();
 	char *s;
