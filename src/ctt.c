@@ -199,6 +199,7 @@ int main(int argc, char **argv) {
 			libdir = realloc(libdir, strlen(libdir) + strlen("/libctt") + 1);
 			strcat(libdir, "/libctt");
 			compiler_args_add_lib_dir(c_args, libdir);
+			compiler_args_add_include_dir(c_args, libdir);
 			free(libdir);
 			nob_temp_rewind(mark);
 		}
